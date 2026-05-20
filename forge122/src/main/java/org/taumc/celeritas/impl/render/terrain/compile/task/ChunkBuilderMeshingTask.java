@@ -113,7 +113,9 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                             if (block.canRenderInLayer(blockState, layer)) {
                                 ForgeHooksClient.setRenderLayer(layer);
                                 var buffer = buildContext.getBufferForLayer(layer);
+                                int startVertex = buffer.getVertexCount();
                                 dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                buildContext.recordRenderedQuads(layer, startVertex, buffer.getVertexCount(), blockState, blockPos);
                             }
                         }
 
@@ -133,6 +135,8 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
         } catch (Throwable ex) {
             // Create a new crash report for other exceptions (e.g. thrown in getQuads)
             throw fillCrashInfo(CrashReport.makeCrashReport(ex, "Encountered exception while building chunk meshes"), slice, blockPos);
+        } finally {
+            ForgeHooksClient.setRenderLayer(null);
         }
 
         buildContext.convertVanillaDataToCeleritasData(buffers);

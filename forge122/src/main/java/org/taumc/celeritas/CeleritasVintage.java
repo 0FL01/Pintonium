@@ -23,6 +23,8 @@ import org.apache.logging.log4j.Logger;
 import org.embeddedt.embeddium.impl.common.util.MathUtil;
 import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import org.embeddedt.embeddium.impl.gl.device.GLRenderDevice;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL30;
 import org.taumc.celeritas.impl.command.TogglePassCommand;
 import org.taumc.celeritas.impl.gui.SodiumGameOptions;
 import org.taumc.celeritas.impl.render.terrain.CeleritasWorldRenderer;
@@ -36,7 +38,11 @@ public class CeleritasVintage {
 
     @EventHandler
     public void onConstruct(FMLConstructionEvent event) {
-        GLRenderDevice.VANILLA_STATE_RESETTER = () -> OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, 0);
+        GLRenderDevice.VANILLA_STATE_RESETTER = () -> {
+            GL30.glBindVertexArray(0);
+            OpenGlHelper.glBindBuffer(OpenGlHelper.GL_ARRAY_BUFFER, 0);
+            GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, 0);
+        };
         VERSION = Loader.instance().getIndexedModList().get(MODID).getVersion();
         MinecraftForge.EVENT_BUS.register(this);
     }

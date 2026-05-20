@@ -218,11 +218,12 @@ public abstract class SimpleWorldRenderer<WORLD, SECTIONMANAGER extends RenderSe
         MinecraftBuiltRenderSectionData.forEachBlockEntity(consumer, this.renderSectionManager.getRenderLists(), this.renderSectionManager.getSectionsWithGlobalEntities());
     }
 
-    protected abstract void renderBlockEntityList(List<BLOCKENTITY> list, BLOCKENTITY_RENDER_CONTEXT context);
+    protected abstract int renderBlockEntityList(List<BLOCKENTITY> list, BLOCKENTITY_RENDER_CONTEXT context);
 
-    private void renderCulledBlockEntities(BLOCKENTITY_RENDER_CONTEXT renderContext) {
+    private int renderCulledBlockEntities(BLOCKENTITY_RENDER_CONTEXT renderContext) {
         SortedRenderLists renderLists = this.renderSectionManager.getRenderLists();
         Iterator<ChunkRenderList> renderListIterator = renderLists.iterator();
+        int rendered = 0;
 
         while (renderListIterator.hasNext()) {
             var renderList = renderListIterator.next();
@@ -254,12 +255,16 @@ public abstract class SimpleWorldRenderer<WORLD, SECTIONMANAGER extends RenderSe
                     continue;
                 }
 
-                this.renderBlockEntityList(blockEntities, renderContext);
+                rendered += this.renderBlockEntityList(blockEntities, renderContext);
             }
         }
+
+        return rendered;
     }
 
-    private void renderGlobalBlockEntities(BLOCKENTITY_RENDER_CONTEXT renderContext) {
+    private int renderGlobalBlockEntities(BLOCKENTITY_RENDER_CONTEXT renderContext) {
+        int rendered = 0;
+
         for (var renderSection : this.renderSectionManager.getSectionsWithGlobalEntities()) {
             var context = renderSection.getBuiltContext();
 
@@ -273,13 +278,14 @@ public abstract class SimpleWorldRenderer<WORLD, SECTIONMANAGER extends RenderSe
                 continue;
             }
 
-            this.renderBlockEntityList(blockEntities, renderContext);
+            rendered += this.renderBlockEntityList(blockEntities, renderContext);
         }
+
+        return rendered;
     }
 
-    public void renderBlockEntities(BLOCKENTITY_RENDER_CONTEXT renderContext) {
-        this.renderCulledBlockEntities(renderContext);
-        this.renderGlobalBlockEntities(renderContext);
+    public int renderBlockEntities(BLOCKENTITY_RENDER_CONTEXT renderContext) {
+        return this.renderCulledBlockEntities(renderContext) + this.renderGlobalBlockEntities(renderContext);
     }
 
     // the volume of a section multiplied by the number of sections to be checked at most

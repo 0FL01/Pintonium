@@ -2,6 +2,7 @@
 celeritas.conflicting_mod=Celeritas detected the presence of mods that are known to cause rendering issues/crashes. It is recommended to uninstall them. See the list below.
 celeritas.conflicting_mod_list=[{2}]
 celeritas.search_bar_empty=Search options...
+options.iris.shaderPackSelection=Shader Packs...
 celeritas.options.added_by_mod_string=Added by mod: %s
 celeritas.options.fullscreen.resolution.tooltip=Controls the resolution of the game in fullscreen mode.
 celeritas.options.use_quad_normals_for_lighting.name=Use Accurate Quad Shading

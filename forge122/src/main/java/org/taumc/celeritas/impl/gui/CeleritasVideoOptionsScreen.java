@@ -14,6 +14,7 @@ import net.minecraft.client.gui.GuiVideoSettings;
 import net.minecraft.util.text.ITextComponent;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
+import org.embeddedt.embeddium.impl.render.ShaderModBridge;
 import org.taumc.celeritas.api.OptionGUIConstructionEvent;
 import org.taumc.celeritas.api.options.structure.Option;
 import org.taumc.celeritas.api.options.structure.OptionFlag;
@@ -41,7 +42,7 @@ public class CeleritasVideoOptionsScreen extends GuiScreen {
     public final GuiScreen prevScreen;
     private final List<OptionPage> pages = new ArrayList<>();
     private AbstractFrame frame;
-    private FlatButtonWidget applyButton, closeButton, undoButton;
+    private FlatButtonWidget applyButton, closeButton, undoButton, shadersButton;
 
     private boolean hasPendingChanges;
 
@@ -93,10 +94,14 @@ public class CeleritasVideoOptionsScreen extends GuiScreen {
         Dim2i undoButtonDim = new Dim2i(tabFrameDim.getLimitX() - 203, tabFrameDim.getLimitY() + 5, 65, 20);
         Dim2i applyButtonDim = new Dim2i(tabFrameDim.getLimitX() - 134, tabFrameDim.getLimitY() + 5, 65, 20);
         Dim2i closeButtonDim = new Dim2i(tabFrameDim.getLimitX() - 65, tabFrameDim.getLimitY() + 5, 65, 20);
+        Dim2i shadersButtonDim = new Dim2i(tabFrameDim.x(), tabFrameDim.getLimitY() + 5, 115, 20);
 
         this.undoButton = new FlatButtonWidget(undoButtonDim, ComponentUtil.translatable("sodium.options.buttons.undo"), this::undoChanges);
         this.applyButton = new FlatButtonWidget(applyButtonDim, ComponentUtil.translatable("sodium.options.buttons.apply"), this::applyChanges);
         this.closeButton = new FlatButtonWidget(closeButtonDim, ComponentUtil.translatable("gui.done"), this::onClose);
+        this.shadersButton = ShaderModBridge.isShaderModPresent()
+                ? new FlatButtonWidget(shadersButtonDim, ComponentUtil.translatable("options.iris.shaderPackSelection"), this::openShaderScreen)
+                : null;
 
         Dim2i searchTextFieldDim = new Dim2i(tabFrameDim.x(), tabFrameDim.y() - 26, tabFrameDim.width(), 20);
 
@@ -147,13 +152,19 @@ public class CeleritasVideoOptionsScreen extends GuiScreen {
     }
 
     public BasicFrame.Builder parentBasicFrameBuilder(Dim2i parentBasicFrameDim, Dim2i tabFrameDim) {
-        return BasicFrame.createBuilder()
+        BasicFrame.Builder builder = BasicFrame.createBuilder()
                 .setDimension(parentBasicFrameDim)
                 .shouldRenderOutline(false)
                 .addChild(parentDim -> this.createTabFrame(tabFrameDim))
                 .addChild(dim -> this.undoButton)
                 .addChild(dim -> this.applyButton)
                 .addChild(dim -> this.closeButton);
+
+        if (this.shadersButton != null) {
+            builder.addChild(dim -> this.shadersButton);
+        }
+
+        return builder;
     }
 
     @Override
@@ -219,6 +230,13 @@ public class CeleritasVideoOptionsScreen extends GuiScreen {
 
     private void undoChanges() {
         this.getAllOptions().forEach(Option::reset);
+    }
+
+    private void openShaderScreen() {
+        Object shaderScreen = ShaderModBridge.openShaderScreen(this);
+        if (shaderScreen instanceof GuiScreen) {
+            this.mc.displayGuiScreen((GuiScreen) shaderScreen);
+        }
     }
 
     public boolean shouldCloseOnEsc() {

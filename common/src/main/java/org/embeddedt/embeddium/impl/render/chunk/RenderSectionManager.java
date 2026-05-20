@@ -451,7 +451,7 @@ public abstract class RenderSectionManager {
     }
 
     @MustBeInvokedByOverriders
-    protected void updateSectionInfo(RenderSection render, @Nullable BuiltRenderSectionData info) {
+    protected boolean updateSectionInfo(RenderSection render, @Nullable BuiltRenderSectionData info) {
         render.setInfo(info);
         long visibilityData = info != null ? info.visibilityData : VisibilityEncoding.NULL;
         this.renderListManager.updateVisibilityData(render.getChunkX(), render.getChunkY(), render.getChunkZ(), visibilityData);
@@ -464,6 +464,8 @@ public abstract class RenderSectionManager {
         } else if (!data.globalBlockEntities.isEmpty()) {
             this.sectionsWithGlobalEntities.add(render);
         }
+
+        return true;
     }
 
     private static List<ChunkBuildOutput> filterChunkBuildResults(ArrayList<ChunkBuildOutput> outputs) {

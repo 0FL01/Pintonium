@@ -17,7 +17,9 @@ public final class QuadTree<T> extends Rect2i
 
     private QuadTree<T> child0, child1, child2, child3;
 
-    private List<Entry<T>> entries = null;
+    private List<Rect2i> entryRects = null;
+
+    private List<T> entryItems = null;
 
     @SuppressWarnings("unchecked")
     public static <T> QuadTree<T> empty() {
@@ -77,8 +79,9 @@ public final class QuadTree<T> extends Rect2i
     }
 
     private void bake() {
-        if (entries != null) {
-            entries = List.copyOf(entries);
+        if (entryItems != null) {
+            entryRects = List.copyOf(entryRects);
+            entryItems = List.copyOf(entryItems);
         }
         // Postorder traversal
         if (child0 != null) {
@@ -108,7 +111,7 @@ public final class QuadTree<T> extends Rect2i
     }
 
     private boolean isEmpty() {
-        return entries == null && child0 == null && child1 == null && child2 == null && child3 == null;
+        return entryItems == null && child0 == null && child1 == null && child2 == null && child3 == null;
     }
 
     private boolean tryChildInsert(QuadTree<T> child, T item, Rect2i size) {
@@ -127,11 +130,13 @@ public final class QuadTree<T> extends Rect2i
         if (tryChildInsert(child2, item, size)) return;
         if (tryChildInsert(child3, item, size)) return;
 
-        if (entries == null) {
-            entries = new ArrayList<>();
+        if (entryItems == null) {
+            entryRects = new ArrayList<>();
+            entryItems = new ArrayList<>();
         }
 
-        entries.add(new Entry<>(size, item));
+        entryRects.add(size);
+        entryItems.add(item);
     }
 
     public T find(int x, int y) {
@@ -139,13 +144,13 @@ public final class QuadTree<T> extends Rect2i
             return null;
         }
 
-        if (entries != null)
+        if (entryItems != null)
         {
-            for (Entry<T> e : entries)
+            for (int i = 0; i < entryItems.size(); i++)
             {
-                if (e.contains(x, y))
+                if (entryRects.get(i).contains(x, y))
                 {
-                    return e.item;
+                    return entryItems.get(i);
                 }
             }
         }
@@ -164,15 +169,6 @@ public final class QuadTree<T> extends Rect2i
         }
 
         return null;
-    }
-
-    private static class Entry<T> extends Rect2i {
-        final T item;
-
-        public Entry(Rect2i size, T item) {
-            super(size);
-            this.item = item;
-        }
     }
 }
 

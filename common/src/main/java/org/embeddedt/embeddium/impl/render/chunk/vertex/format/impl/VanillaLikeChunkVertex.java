@@ -3,6 +3,7 @@ package org.embeddedt.embeddium.impl.render.chunk.vertex.format.impl;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexAttributeFormat;
 import org.embeddedt.embeddium.impl.gl.attribute.GlVertexFormat;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
+import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexExtendedData;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.lwjgl.system.MemoryUtil;
@@ -12,14 +13,25 @@ import org.lwjgl.system.MemoryUtil;
  * compatible with mods & resource packs that need high precision for models.
  */
 public class VanillaLikeChunkVertex implements ChunkVertexType {
-    public static final int STRIDE = 28;
+    public static final int STRIDE = 48;
 
     public static final GlVertexFormat VERTEX_FORMAT = GlVertexFormat.builder(STRIDE)
             .addElement("a_PosId", 0, GlVertexAttributeFormat.FLOAT, 3, false, false)
             .addElement("a_Color", 12, GlVertexAttributeFormat.UNSIGNED_BYTE, 4, true, false)
             .addElement("a_TexCoord", 16, GlVertexAttributeFormat.FLOAT, 2, false, false)
             .addElement("a_LightCoord", 24, GlVertexAttributeFormat.UNSIGNED_INT, 1, false, true)
+            .addElement("mc_midTexCoord", GlVertexFormat.NEXT_ALIGNED_POINTER, GlVertexAttributeFormat.UNSIGNED_SHORT, 2, false, false)
+            .addElement("at_tangent", GlVertexFormat.NEXT_ALIGNED_POINTER, GlVertexAttributeFormat.BYTE, 4, true, false)
+            .addElement("iris_Normal", GlVertexFormat.NEXT_ALIGNED_POINTER, GlVertexAttributeFormat.BYTE, 3, true, false)
+            .addElement("mc_Entity", GlVertexFormat.NEXT_ALIGNED_POINTER, GlVertexAttributeFormat.SHORT, 2, false, false)
+            .addElement("at_midBlock", GlVertexFormat.NEXT_ALIGNED_POINTER, GlVertexAttributeFormat.BYTE, 4, false, false)
             .build();
+
+    private static final int MID_TEX_OFFSET = VERTEX_FORMAT.getAttribute("mc_midTexCoord").getPointer();
+    private static final int TANGENT_OFFSET = VERTEX_FORMAT.getAttribute("at_tangent").getPointer();
+    private static final int NORMAL_OFFSET = VERTEX_FORMAT.getAttribute("iris_Normal").getPointer();
+    private static final int MC_ENTITY_OFFSET = VERTEX_FORMAT.getAttribute("mc_Entity").getPointer();
+    private static final int MID_BLOCK_OFFSET = VERTEX_FORMAT.getAttribute("at_midBlock").getPointer();
 
     @Override
     public float getPositionScale() {
@@ -52,8 +64,22 @@ public class VanillaLikeChunkVertex implements ChunkVertexType {
             MemoryUtil.memPutFloat(ptr + 20, encodeTexture(vertex.v));
             MemoryUtil.memPutInt(ptr + 24, (encodeDrawParameters(material, sectionIndex) << 0) | (encodeLight(vertex.light) << 16));
 
+            writeExtendedData(ptr, vertex);
+
             return ptr + STRIDE;
         };
+    }
+
+    private static void writeExtendedData(long ptr, ChunkVertexEncoder.Vertex vertex) {
+        ChunkVertexExtendedData.Data data = ChunkVertexExtendedData.current();
+
+        MemoryUtil.memPutInt(ptr + MID_TEX_OFFSET, data.midTexCoord);
+        MemoryUtil.memPutInt(ptr + TANGENT_OFFSET, data.tangent);
+        MemoryUtil.memPutInt(ptr + NORMAL_OFFSET, data.normal);
+        MemoryUtil.memPutShort(ptr + MC_ENTITY_OFFSET, data.blockId);
+        MemoryUtil.memPutShort(ptr + MC_ENTITY_OFFSET + 2, data.renderType);
+        MemoryUtil.memPutInt(ptr + MID_BLOCK_OFFSET, ChunkVertexExtendedData.computeMidBlock(vertex.x, vertex.y, vertex.z, data.localX, data.localY, data.localZ));
+        MemoryUtil.memPutByte(ptr + MID_BLOCK_OFFSET + 3, data.lightValue);
     }
 
     private static int encodeDrawParameters(Material material, int sectionIndex) {

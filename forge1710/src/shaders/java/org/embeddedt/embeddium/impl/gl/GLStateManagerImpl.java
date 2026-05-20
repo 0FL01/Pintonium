@@ -244,17 +244,21 @@ public class GLStateManagerImpl implements GLStateManagerService {
 
     @Override
     public int getActiveTexture() {
-        return GL13.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        return getActiveTextureUnit();
     }
 
     @Override
     public int getActiveTextureAccessor() {
-        return GL13.GL_ACTIVE_TEXTURE;
+        return getActiveTextureUnit();
     }
 
     @Override
     public int getBoundTexture(int internalUnit) {
-        return GL11.glGetInteger(internalUnit);
+        int activeTexture = GL13.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0 + internalUnit);
+        int texture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        GL13.glActiveTexture(activeTexture);
+        return texture;
     }
 
     @Override
@@ -294,6 +298,13 @@ public class GLStateManagerImpl implements GLStateManagerService {
 
     @Override
     public void setBoundTexture(int unit, int texture) {
-        GL11.glBindTexture(GL13.GL_TEXTURE0 + unit, texture);
+        int activeTexture = GL13.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        GL13.glActiveTexture(GL13.GL_TEXTURE0 + unit);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
+        GL13.glActiveTexture(activeTexture);
+    }
+
+    private static int getActiveTextureUnit() {
+        return GL13.glGetInteger(GL13.GL_ACTIVE_TEXTURE) - GL13.GL_TEXTURE0;
     }
 }

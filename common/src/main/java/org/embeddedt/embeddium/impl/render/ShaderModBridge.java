@@ -21,6 +21,18 @@ public class ShaderModBridge {
             e.printStackTrace();
         } catch (Throwable ignored) {
         }
+        if (shadersEnabled == null || shaderOpenScreen == null) {
+            try {
+                Class<?> celeritasShadersApiClass = Class.forName("org.taumc.celeritas.api.v0.CeleritasShadersApi");
+                Method instanceGetter = celeritasShadersApiClass.getDeclaredMethod("getInstance");
+                Object celeritasShadersApiInstance = instanceGetter.invoke(null);
+                shadersEnabled = MethodHandles.lookup().unreflect(celeritasShadersApiClass.getMethod("isShaderPackInUse")).bindTo(celeritasShadersApiInstance);
+                shaderOpenScreen = MethodHandles.lookup().unreflect(celeritasShadersApiClass.getMethod("openMainIrisScreenObj", Object.class)).bindTo(celeritasShadersApiInstance);
+            } catch (NoSuchMethodException e) {
+                e.printStackTrace();
+            } catch (Throwable ignored) {
+            }
+        }
         SHADERS_ENABLED = shadersEnabled;
         SHADERS_OPEN_SCREEN = shaderOpenScreen;
         MethodHandle nvidiumEnabled = null;

@@ -84,9 +84,10 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
 
 
     @Override
-    protected void renderBlockEntityList(List<TileEntity> list, TileEntityRenderContext tileEntityRenderContext) {
+    protected int renderBlockEntityList(List<TileEntity> list, TileEntityRenderContext tileEntityRenderContext) {
         int pass = MinecraftForgeClient.getRenderPass();
         float partialTicks = tileEntityRenderContext.partialTicks;
+        int rendered = 0;
 
         for (TileEntity tileEntity : list) {
             if(!tileEntity.shouldRenderInPass(pass))
@@ -94,6 +95,7 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
 
             try {
                 TileEntityRendererDispatcher.instance.render(tileEntity, partialTicks, -1);
+                rendered++;
             } catch(RuntimeException e) {
                 if(tileEntity.isInvalid()) {
                     CeleritasVintage.logger().error("Suppressing crash from invalid tile entity", e);
@@ -102,14 +104,17 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
                 }
             }
         }
+
+        return rendered;
     }
 
     @Override
-    public void renderBlockEntities(TileEntityRenderContext tileEntityRenderContext) {
+    public int renderBlockEntities(TileEntityRenderContext tileEntityRenderContext) {
         int pass = MinecraftForgeClient.getRenderPass();
         TileEntityRendererDispatcher.instance.preDrawBatch();
-        super.renderBlockEntities(tileEntityRenderContext);
+        int rendered = super.renderBlockEntities(tileEntityRenderContext);
         TileEntityRendererDispatcher.instance.drawBatch(pass);
+        return rendered;
     }
 
     /**

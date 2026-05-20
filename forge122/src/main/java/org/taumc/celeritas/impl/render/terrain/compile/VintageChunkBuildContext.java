@@ -3,12 +3,28 @@ package org.taumc.celeritas.impl.render.terrain.compile;
 //? if 1.10.2 {
 //?}
 import lombok.Getter;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import net.irisshaders.iris.shaderpack.materialmap.VintageWorldRenderingSettings;
+import net.minecraft.block.BlockBush;
+import net.minecraft.block.BlockCrops;
+import net.minecraft.block.BlockDoublePlant;
+import net.minecraft.block.BlockLeaves;
+import net.minecraft.block.BlockLilyPad;
+import net.minecraft.block.BlockReed;
+import net.minecraft.block.BlockSapling;
+import net.minecraft.block.BlockTallGrass;
+import net.minecraft.block.BlockVine;
+import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import net.minecraft.block.state.IBlockState;
+import net.minecraft.init.Blocks;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
 import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
@@ -16,6 +32,7 @@ import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildContext;
 import org.embeddedt.embeddium.impl.render.chunk.data.MinecraftBuiltRenderSectionData;
 import org.embeddedt.embeddium.impl.render.chunk.sprite.SpriteTransparencyLevel;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.material.Material;
+import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexExtendedData;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexEncoder;
 import org.embeddedt.embeddium.impl.util.QuadUtil;
 import org.lwjgl.opengl.GL11C;
@@ -26,14 +43,21 @@ import org.taumc.celeritas.impl.extensions.TextureMapExtension;
 import org.taumc.celeritas.impl.world.WorldSlice;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Locale;
 import java.util.Objects;
 
 public class VintageChunkBuildContext extends ChunkBuildContext {
-    public static final BlockRenderLayer[] LAYERS = BlockRenderLayer.values();
+    public static final BlockRenderLayer[] LAYERS = new BlockRenderLayer[] {
+            BlockRenderLayer.SOLID,
+            BlockRenderLayer.CUTOUT_MIPPED,
+            BlockRenderLayer.CUTOUT,
+            BlockRenderLayer.TRANSLUCENT
+    };
     private final TextureMapExtension textureAtlas;
     private final net.minecraft.client.renderer.BufferBuilder[] worldRenderers = new net.minecraft.client.renderer.BufferBuilder[LAYERS.length];
     private final boolean[] usedWorldRenderers = new boolean[LAYERS.length];
+    private final ArrayList<QuadMetadata>[] quadMetadataByLayer = new ArrayList[LAYERS.length];
     private int offX, offY, offZ;
     @Getter
     private final WorldSlice worldSlice;
@@ -46,6 +70,9 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         this.worldSlice = new WorldSlice(world);
         this.textureAtlas = (TextureMapExtension) Minecraft.getMinecraft().getTextureMapBlocks();
         this.useRenderPassOptimization = CeleritasVintage.options().performance.useRenderPassOptimization;
+        for (int i = 0; i < LAYERS.length; i++) {
+            this.quadMetadataByLayer[i] = new ArrayList<>();
+        }
     }
 
     public void setupTranslation(int x, int y, int z) {
@@ -68,6 +95,25 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         return builder;
     }
 
+    public void recordRenderedQuads(BlockRenderLayer layer, int startVertex, int endVertex, IBlockState state, BlockPos pos) {
+        int startQuad = startVertex / 4;
+        int endQuad = endVertex / 4;
+
+        if (endQuad <= startQuad) {
+            return;
+        }
+
+        this.quadMetadataByLayer[layer.ordinal()].add(new QuadMetadata(
+                startQuad,
+                endQuad,
+                shaderBlockId(state),
+                shaderRenderType(state),
+                pos.getX() - this.offX,
+                pos.getY() - this.offY,
+                pos.getZ() - this.offZ,
+                (byte) state.getLightValue()));
+    }
+
     public void convertVanillaDataToCeleritasData(ChunkBuildBuffers buffers) {
         var renderers = this.worldRenderers;
         var used = this.usedWorldRenderers;
@@ -80,7 +126,8 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             used[i] = false;
             ByteBuffer rawBuffer = bufferBuilder.getByteBuffer();
             var material = buffers.getRenderPassConfiguration().getMaterialForRenderType(LAYERS[i]);
-            copyBlockData(rawBuffer, buffers, material);
+            copyBlockData(rawBuffer, buffers, material, this.quadMetadataByLayer[i]);
+            this.quadMetadataByLayer[i].clear();
         }
     }
 
@@ -93,6 +140,7 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
                 this.worldRenderers[i].finishDrawing();
                 this.usedWorldRenderers[i] = false;
             }
+            this.quadMetadataByLayer[i].clear();
         }
     }
 
@@ -121,12 +169,13 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         BLOCK_VERTEX_FORMAT_SIZE = size;
     }
 
-    private void copyBlockData(ByteBuffer source, ChunkBuildBuffers buffers, Material material) {
+    private void copyBlockData(ByteBuffer source, ChunkBuildBuffers buffers, Material material, ArrayList<QuadMetadata> quadMetadata) {
         int vsize = BLOCK_VERTEX_FORMAT_SIZE;
         int numQuads = source.limit() / (vsize * 4);
         long ptr = MemoryUtil.memAddress(source);
         var quad = ChunkVertexEncoder.Vertex.uninitializedQuad();
         var animatedSpritesList = ((MinecraftBuiltRenderSectionData<TextureAtlasSprite, TileEntity>)buffers.getSectionContextBundle()).animatedSprites;
+        int metadataIndex = 0;
         for(int q = 0; q < numQuads; q++) {
             float uSum = 0, vSum = 0;
             for(int v = 0; v < 4; v++) {
@@ -154,7 +203,158 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             }
             ModelQuadFacing facing = QuadUtil.findNormalFace(trueNormal);
             Material correctMaterial = selectMaterial(material, sprite);
+            QuadMetadata metadata = findMetadata(quadMetadata, q, metadataIndex);
+            if (metadata != null) {
+                while (metadataIndex + 1 < quadMetadata.size() && q >= quadMetadata.get(metadataIndex).endQuad) {
+                    metadataIndex++;
+                }
+                ChunkVertexExtendedData.set(
+                        metadata.blockId,
+                        metadata.renderType,
+                        ChunkVertexExtendedData.encodeMidTexCoord(uSum * 0.25f, vSum * 0.25f),
+                        trueNormal,
+                        ChunkVertexExtendedData.computeTangent(quad, trueNormal),
+                        metadata.localX,
+                        metadata.localY,
+                        metadata.localZ,
+                        metadata.lightValue);
+            } else {
+                ChunkVertexExtendedData.clear();
+            }
             buffers.get(correctMaterial).getVertexBuffer(facing).push(quad, correctMaterial);
         }
+        ChunkVertexExtendedData.clear();
+    }
+
+    private static QuadMetadata findMetadata(ArrayList<QuadMetadata> metadata, int quad, int startIndex) {
+        for (int i = startIndex; i < metadata.size(); i++) {
+            QuadMetadata entry = metadata.get(i);
+            if (quad < entry.startQuad) {
+                return null;
+            }
+            if (quad < entry.endQuad) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    private static int shaderBlockId(IBlockState state) {
+        Object2IntMap<IBlockState> mappedBlockIds = VintageWorldRenderingSettings.INSTANCE.getBlockStateIds();
+        if (mappedBlockIds.containsKey(state)) {
+            int mappedId = mappedBlockIds.getInt(state);
+            if (mappedId != -1) {
+                return mappedId;
+            }
+        }
+
+        Block block = state.getBlock();
+        int fallbackId = shaderFallbackBlockId(state, block, mappedBlockIds);
+        if (fallbackId != -1) {
+            return fallbackId;
+        }
+
+        int id = Block.getIdFromBlock(block);
+
+        if (id == 8) {
+            return 9;
+        }
+        if (id == 10) {
+            return 11;
+        }
+
+        return id;
+    }
+
+    private static int shaderFallbackBlockId(IBlockState state, Block block, Object2IntMap<IBlockState> mappedBlockIds) {
+        ResourceLocation registryName = Block.REGISTRY.getNameForObject(block);
+        if (registryName == null || "minecraft".equals(registryName.getNamespace())) {
+            return -1;
+        }
+
+        String path = registryName.getPath().toLowerCase(Locale.ROOT);
+
+        if (isLeavesLike(state, block, path)) {
+            return mappedIdForBlocks(mappedBlockIds, Blocks.LEAVES, Blocks.LEAVES2);
+        }
+        if (isVineLike(state, block, path)) {
+            return mappedIdForBlocks(mappedBlockIds, Blocks.VINE);
+        }
+        if (isLilyPadLike(block, path)) {
+            return mappedIdForBlocks(mappedBlockIds, Blocks.WATERLILY);
+        }
+        if (isPlantLike(state, block)) {
+            return mappedIdForBlocks(mappedBlockIds, Blocks.TALLGRASS, Blocks.SAPLING, Blocks.YELLOW_FLOWER, Blocks.RED_FLOWER);
+        }
+
+        return -1;
+    }
+
+    private static int mappedIdForBlocks(Object2IntMap<IBlockState> mappedBlockIds, Block... blocks) {
+        for (Block block : blocks) {
+            for (IBlockState state : block.getBlockState().getValidStates()) {
+                if (mappedBlockIds.containsKey(state)) {
+                    int mappedId = mappedBlockIds.getInt(state);
+                    if (mappedId != -1) {
+                        return mappedId;
+                    }
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    private static boolean isLeavesLike(IBlockState state, Block block, String path) {
+        return block instanceof BlockLeaves
+                || state.getMaterial() == net.minecraft.block.material.Material.LEAVES
+                || containsAny(path, "leaves", "leaf");
+    }
+
+    private static boolean isVineLike(IBlockState state, Block block, String path) {
+        return block instanceof BlockVine
+                || state.getMaterial() == net.minecraft.block.material.Material.VINE
+                || containsAny(path, "vine", "ivy");
+    }
+
+    private static boolean isLilyPadLike(Block block, String path) {
+        return block instanceof BlockLilyPad
+                || containsAny(path, "lily_pad", "lilypad", "waterlily", "water_lily", "frogbit", "duckweed");
+    }
+
+    private static boolean isPlantLike(IBlockState state, Block block) {
+        net.minecraft.block.material.Material material = state.getMaterial();
+        if (material == net.minecraft.block.material.Material.GRASS
+                || material == net.minecraft.block.material.Material.GROUND
+                || material == net.minecraft.block.material.Material.ROCK) {
+            return false;
+        }
+
+        return block instanceof BlockBush
+                || block instanceof BlockCrops
+                || block instanceof BlockDoublePlant
+                || block instanceof BlockReed
+                || block instanceof BlockSapling
+                || block instanceof BlockTallGrass
+                || material == net.minecraft.block.material.Material.PLANTS
+                || material == net.minecraft.block.material.Material.CACTUS;
+    }
+
+    private static boolean containsAny(String value, String... needles) {
+        for (String needle : needles) {
+            if (value.contains(needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static short shaderRenderType(IBlockState state) {
+        return state.getMaterial().isLiquid() ? (short) 1 : (short) 0;
+    }
+
+    private record QuadMetadata(int startQuad, int endQuad, int blockId, short renderType,
+                                int localX, int localY, int localZ, byte lightValue) {
     }
 }

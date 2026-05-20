@@ -42,6 +42,10 @@ unimined.minecraft {
             project(":common"),
             project(":common").sourceSets.getByName("main")
     )
+    combineWith(
+            project(":common-shaders"),
+            project(":common-shaders").sourceSets.getByName("main")
+    )
 
     version(project.name)
 
@@ -80,12 +84,25 @@ unimined.minecraft {
 
 dependencies {
     "shadow"("org.joml:joml:1.10.5")
+    "shadow"("org.taumc:glsl-transformation-lib:${rootProject.properties["glsl_transformation_lib_version"]}:fat")
+    "shadow"("org.anarres:jcpp:1.4.14")
     implementation("org.joml:joml:1.10.5")
     implementation("zone.rong:mixinbooter:10.5")
     compileOnly("com.gtnewhorizons.retrofuturabootstrap:RetroFuturaBootstrap:1.0.7") {
         exclude(group = "org.apache.logging.log4j")
     }
     modCompileOnly("maven.modrinth:fluidlogged-api:3.0.6")
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs("src/shaders/java")
+        }
+        resources {
+            srcDirs("src/shaders/resources")
+        }
+    }
 }
 
 tasks.named("preRunClient") {
