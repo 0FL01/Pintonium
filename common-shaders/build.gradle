@@ -3,7 +3,7 @@ plugins {
     id 'maven-publish'
 }
 
-group = "org.embeddedt.celeritas"
+group = "org.embeddedt.pintonium"
 version = rootProject.version
 
 java {
@@ -57,7 +57,7 @@ evaluationDependsOn(":common")
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId 'celeritas-common-shaders'
+            artifactId 'pintonium-common-shaders'
             from components.java
         }
     }

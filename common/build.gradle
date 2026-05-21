@@ -3,7 +3,7 @@ plugins {
     id 'maven-publish'
 }
 
-group = "org.embeddedt.celeritas"
+group = "org.embeddedt.pintonium"
 version = rootProject.version
 
 java {
@@ -52,7 +52,7 @@ tasks.named('test', Test) {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifactId 'celeritas-common'
+            artifactId 'pintonium-common'
             from components.java
         }
     }

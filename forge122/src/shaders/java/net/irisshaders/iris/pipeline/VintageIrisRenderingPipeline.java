@@ -151,7 +151,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     @Override
     public void addDebugText(List<String> messages) {
         messages.add("[Iris] 1.12 shader pipeline: composite/final MVP");
-        messages.add("[Iris] Terrain shader overrides: Celeritas chunk renderer bridge enabled");
+        messages.add("[Iris] Terrain shader overrides: Pintonium chunk renderer bridge enabled");
         if (this.shadowRenderer == null) {
             messages.add("[Iris] Shadow Maps: not used by shader pack or not implemented on 1.12 yet");
         }

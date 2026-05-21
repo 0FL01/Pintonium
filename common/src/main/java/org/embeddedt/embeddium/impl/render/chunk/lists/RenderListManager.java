@@ -82,7 +82,7 @@ public class RenderListManager {
         if (useAsyncGraphSearch) {
             this.asyncGraphExecutor = Executors.newSingleThreadExecutor(runnable -> {
                 Thread thread = new Thread(runnable);
-                thread.setName("Celeritas chunk graph search thread");
+                thread.setName("Pintonium chunk graph search thread");
                 thread.setDaemon(true);
                 return thread;
             });

@@ -171,7 +171,8 @@ public class SodiumTerrainPipeline {
 	public ProgramUniforms.Builder initUniforms(int programId) {
 		ProgramUniforms.Builder uniforms = ProgramUniforms.builder("<sodium shaders>", programId);
 
-		CommonUniforms.addDynamicUniforms(uniforms, FogMode.PER_VERTEX);
+		CommonUniforms.addCommonUniforms(uniforms, this.programSet.getPack().getIdMap(), this.programSet.getPackDirectives(),
+				this.parent.getFrameUpdateNotifier(), FogMode.PER_VERTEX);
 		customUniforms.assignTo(uniforms);
 
 		BuiltinReplacementUniforms.addBuiltinReplacementUniforms(uniforms);

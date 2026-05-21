@@ -83,7 +83,7 @@ public class SodiumGameOptions {
 
     public static void writeToDisk(SodiumGameOptions config) throws IOException {
         if (config.isReadOnly()) {
-            CeleritasVintage.logger().warn("Skipping Celeritas options save because the configuration is in read-only fallback mode");
+            CeleritasVintage.logger().warn("Skipping Pintonium options save because the configuration is in read-only fallback mode");
         } else {
             Path dir = config.configPath.getParent();
             if (!Files.exists(dir)) {

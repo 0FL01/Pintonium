@@ -24,7 +24,7 @@ import java.lang.management.ManagementFactory;
 @Mod(modid = CeleritasArchaic.MODID, useMetadata = true)
 public class CeleritasArchaic {
     public static final String MODID = "celeritas";
-    private static final Logger LOGGER = LogManager.getLogger("Celeritas");
+    private static final Logger LOGGER = LogManager.getLogger("Pintonium");
     public static String VERSION;
 
     @Mod.EventHandler
@@ -49,7 +49,7 @@ public class CeleritasArchaic {
 
         var strings = event.right;
         strings.add("");
-        strings.add("%s%s Renderer (%s)".formatted(EnumChatFormatting.GREEN, "Celeritas", VERSION));
+        strings.add("%s%s Renderer (%s)".formatted(EnumChatFormatting.GREEN, "Pintonium", VERSION));
 
         var renderer = CeleritasWorldRenderer.instanceNullable();
 

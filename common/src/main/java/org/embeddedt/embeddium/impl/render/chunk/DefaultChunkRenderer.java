@@ -71,7 +71,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
         // If there is no active program, shader compilation probably failed, and we can't render anything.
         if (this.activeProgram != null) {
-            boolean useBlockFaceCulling = this.useBlockFaceCulling();
+            boolean useBlockFaceCulling = this.useBlockFaceCulling() && !renderPass.supportsFragmentDiscard();
 
             GLDebug.pushGroup(770, renderPass.name() + " terrain pass");
 

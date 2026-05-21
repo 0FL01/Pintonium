@@ -29,7 +29,7 @@ version = rootProject.version
 apply from: rootProject.file('buildSrc/maven_repo.gradle')
 
 ModLoader configuredModLoader = ModLoader.fromProject(project)
-archivesBaseName = "celeritas-$configuredModLoader.friendlyName-mc${ModLoader.getMinecraftVersion(project).replaceAll("^1\\.", "")}"
+archivesBaseName = "pintonium-$configuredModLoader.friendlyName-mc${ModLoader.getMinecraftVersion(project).replaceAll("^1\\.", "")}"
 
 def packageJar = tasks.create("packageJar", Copy.class) {
     into("${rootProject.layout.buildDirectory.get()}/libs/${project.version}")

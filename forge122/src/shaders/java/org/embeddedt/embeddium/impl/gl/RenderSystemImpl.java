@@ -2,6 +2,9 @@ package org.embeddedt.embeddium.impl.gl;
 
 import com.mitchej123.glsm.RenderSystemService;
 import net.minecraft.client.renderer.OpenGlHelper;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.EntityRenderer;
+import net.minecraft.client.renderer.GlStateManager;
 import org.joml.Matrix4f;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
@@ -141,17 +144,22 @@ public class RenderSystemImpl implements RenderSystemService {
 
     @Override
     public float[] getShaderFogColor() {
-        return new float[] {0.0f, 0.0f, 0.0f, 1.0f};
+        EntityRenderer entityRenderer = Minecraft.getMinecraft().entityRenderer;
+        if (entityRenderer == null) {
+            return new float[] {0.0f, 0.0f, 0.0f, 1.0f};
+        }
+
+        return new float[] {entityRenderer.fogColorRed, entityRenderer.fogColorGreen, entityRenderer.fogColorBlue, 1.0f};
     }
 
     @Override
     public float getShaderFogStart() {
-        return 0.0f;
+        return GlStateManager.fogState.start;
     }
 
     @Override
     public float getShaderFogEnd() {
-        return 1.0f;
+        return GlStateManager.fogState.end;
     }
 
     @Override

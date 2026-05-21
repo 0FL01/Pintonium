@@ -46,7 +46,7 @@ public abstract class VanillaRenderingPipeline implements WorldRenderingPipeline
 
 	@Override
 	public void addDebugText(List<String> messages) {
-        messages.add("[Celeritas Shaders]: Vanilla Rendering Pipeline");
+        messages.add("[Pintonium Shaders]: Vanilla Rendering Pipeline");
 	}
 
 	@Override

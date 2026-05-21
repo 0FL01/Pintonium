@@ -118,7 +118,14 @@ public class WorldSlice implements CeleritasBlockAccess {
 
     public static ChunkRenderContext prepare(World world, SectionPos origin, ClonedChunkSectionCache sectionCache) {
         Chunk chunk = world.getChunk(origin.x(), origin.z());
-        ExtendedBlockStorage section = chunk.getBlockStorageArray()[origin.y()];
+        ExtendedBlockStorage[] sectionArray = chunk.getBlockStorageArray();
+        int sectionY = origin.y();
+
+        if (sectionY < 0 || sectionY >= sectionArray.length) {
+            return null;
+        }
+
+        ExtendedBlockStorage section = sectionArray[sectionY];
 
         // If the chunk section is absent or empty, simply terminate now. There will never be anything in this chunk
         // section to render, so we need to signal that a chunk render task shouldn't created. This saves a considerable

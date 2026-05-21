@@ -196,6 +196,8 @@ public class VintageShaderPackSelectionScreen extends GuiScreen {
             if (packName == null) {
                 IrisVintage.resetVanillaGlState();
             }
+        } else if (packName == null) {
+            IrisVintage.resetMenuGlState();
         }
 
         this.statusMessage = packName == null ? "Shaders disabled." : "Selected " + packName + ".";

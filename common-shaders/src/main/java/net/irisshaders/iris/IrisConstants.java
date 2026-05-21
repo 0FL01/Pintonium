@@ -7,7 +7,7 @@ public class IrisConstants {
      * easy branding changes (for forks). You'll still need to change this
      * separately in mixin plugin classes & the language files.
      */
-    public static final String MODNAME = "Celeritas";
+    public static final String MODNAME = "Pintonium";
     public static final float DEPTH = 0.125F;
 
     // Bump this up if you want more shadow color buffers!

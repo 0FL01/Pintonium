@@ -94,7 +94,7 @@ public class ModelTextureAnalyzer {
             int startIndex = i * numGroupsPerThread;
             int endIndex = Math.min(blockStateGroups.size(), (i+1) * numGroupsPerThread);
             var thread = new AnalyzerThread(blockStateIds, blockStateGroups.subList(startIndex, endIndex));
-            thread.setName("Celeritas Texture Material Analyzer #" + (i + 1));
+            thread.setName("Pintonium Texture Material Analyzer #" + (i + 1));
             this.threads.add(thread);
         }
     }

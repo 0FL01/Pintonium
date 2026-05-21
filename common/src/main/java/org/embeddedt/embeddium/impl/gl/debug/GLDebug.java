@@ -22,7 +22,7 @@ import java.io.PrintStream;
 import java.util.function.Consumer;
 
 public final class GLDebug {
-    static final Logger LOGGER = LogManager.getLogger("Celeritas/GLDebug");
+    static final Logger LOGGER = LogManager.getLogger("Pintonium/GLDebug");
     
 	private static DebugState debugState = new UnsupportedDebugState();
 

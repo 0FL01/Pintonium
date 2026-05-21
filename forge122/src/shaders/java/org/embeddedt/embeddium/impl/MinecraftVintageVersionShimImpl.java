@@ -127,6 +127,10 @@ public class MinecraftVintageVersionShimImpl implements MinecraftVersionShimServ
 
     @Override
     public int getMoonPhase() {
+        if (this.isNoSkylightDimension()) {
+            return 0;
+        }
+
         WorldClient world = CLIENT.world;
         return world == null ? 0 : world.getMoonPhase();
     }
@@ -194,7 +198,8 @@ public class MinecraftVintageVersionShimImpl implements MinecraftVersionShimServ
 
     @Override
     public boolean hasSkyLight() {
-        return !hasCeiling();
+        WorldClient world = CLIENT.world;
+        return world != null && world.provider != null && world.provider.hasSkyLight();
     }
 
     @Override
@@ -324,12 +329,17 @@ public class MinecraftVintageVersionShimImpl implements MinecraftVersionShimServ
     public Vector3d getSkyColor() {
         WorldClient world = CLIENT.world;
         Entity camera = CLIENT.getRenderViewEntity();
-        if (world == null || camera == null) {
+        if (world == null || camera == null || this.isNoSkylightDimension()) {
             return ZERO3D;
         }
 
         Vec3d sky = world.getSkyColor(camera, CapturedRenderingState.INSTANCE.getTickDelta());
         return new Vector3d(sky.x, sky.y, sky.z);
+    }
+
+    private boolean isNoSkylightDimension() {
+        WorldClient world = CLIENT.world;
+        return world != null && world.provider != null && !world.provider.hasSkyLight();
     }
 
     @Override

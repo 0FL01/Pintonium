@@ -72,7 +72,7 @@ plugins {
     id("dev.kikugie.stonecutter") version(extra["stonecutter_version"].toString())
 }
 
-rootProject.name = "celeritas"
+rootProject.name = "pintonium"
 
 includeBuild("plugins/celeritas-mdg-plugin")
 includeBuild("plugins/celeritas-unimined-plugin")
@@ -128,16 +128,16 @@ createStonecutterProject("babric", listOf("1.2.5", "1.0.0-beta.7.3", "1.0.0-beta
     versions(versions)
 }
 
-data class CeleritasTarget(val friendlyName: String, val loaders: List<String>, val semanticName: String = friendlyName)
+data class PintoniumTarget(val friendlyName: String, val loaders: List<String>, val semanticName: String = friendlyName)
 
 createStonecutterProject("modern", listOf(
-        CeleritasTarget("1.20.1", listOf("forge", "fabric")),
-        //CeleritasTarget("1.16.5", listOf("forge")),
-        //CeleritasTarget("1.18.2", listOf("forge")),
-        //CeleritasTarget("1.20.4", listOf("neoforge")),
-        CeleritasTarget("1.21.1", listOf("fabric", "neoforge")),
-        CeleritasTarget("1.21.8", listOf("neoforge")),
-        //CeleritasTarget("1.19.2", listOf("forge", "fabric"))
+        PintoniumTarget("1.20.1", listOf("forge", "fabric")),
+        //PintoniumTarget("1.16.5", listOf("forge")),
+        //PintoniumTarget("1.18.2", listOf("forge")),
+        //PintoniumTarget("1.20.4", listOf("neoforge")),
+        PintoniumTarget("1.21.1", listOf("fabric", "neoforge")),
+        PintoniumTarget("1.21.8", listOf("neoforge")),
+        //PintoniumTarget("1.19.2", listOf("forge", "fabric"))
 ), { it.friendlyName }) { targets ->
     targets.forEach {
         val target = it

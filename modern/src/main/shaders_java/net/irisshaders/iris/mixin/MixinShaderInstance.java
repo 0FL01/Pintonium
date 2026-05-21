@@ -132,7 +132,7 @@ public abstract class MixinShaderInstance implements ShaderInstanceInterface, MC
     }
 
     public boolean iris$shouldSkipThis() {
-        // Celeritas always allows unknown shaders
+        // Pintonium always allows unknown shaders
         if (!IrisCommon.getIrisConfig().isBlockUnknownShaders()) {
             if (ModernShadowRenderer.ACTIVE) return true;
             if (!shouldOverrideShaders()) return false;

@@ -32,7 +32,7 @@ import org.taumc.celeritas.impl.render.terrain.CeleritasWorldRenderer;
 @Mod(modid = CeleritasVintage.MODID, useMetadata = true)
 public class CeleritasVintage {
     public static final String MODID = "celeritas";
-    private static final Logger LOGGER = LogManager.getLogger("Celeritas");
+    private static final Logger LOGGER = LogManager.getLogger("Pintonium");
     public static String VERSION;
     private static final SodiumGameOptions CONFIG = loadConfig();
 
@@ -63,7 +63,7 @@ public class CeleritasVintage {
 
         var strings = event.getRight();
         strings.add("");
-        strings.add("%s%s Renderer (%s)".formatted(ChatFormatting.GREEN, "Celeritas", VERSION));
+        strings.add("%s%s Renderer (%s)".formatted(ChatFormatting.GREEN, "Pintonium", VERSION));
 
         // Embeddium: Show a lot less with reduced debug info
         if (Minecraft.getMinecraft().isReducedDebug()) {

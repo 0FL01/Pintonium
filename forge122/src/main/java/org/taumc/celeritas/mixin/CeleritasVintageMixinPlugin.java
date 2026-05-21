@@ -17,11 +17,11 @@ import java.util.*;
 import java.util.stream.Stream;
 
 public class CeleritasVintageMixinPlugin implements IMixinConfigPlugin {
-    public static final Logger LOGGER = LogManager.getLogger("CeleritasMixins");
+    public static final Logger LOGGER = LogManager.getLogger("PintoniumMixins");
 
     @Override
     public void onLoad(String mixinPackage) {
-        LOGGER.info("Loaded Celeritas mixin plugin");
+        LOGGER.info("Loaded Pintonium mixin plugin");
         try {
             Class.forName("com.gtnewhorizons.retrofuturabootstrap.SharedConfig");
             // class exists, apply compat

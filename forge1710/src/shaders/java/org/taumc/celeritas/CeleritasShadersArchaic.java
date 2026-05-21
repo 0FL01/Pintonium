@@ -23,8 +23,8 @@ import java.util.Objects;
 @Mod(modid = CeleritasShadersArchaic.MODID, useMetadata = true)
 public class CeleritasShadersArchaic {
     public static final String MODID = "celeritas_shaders";
-    private static final Logger LOGGER = LogManager.getLogger("Celeritas-Shaders");
-    private static final String MODNAME = "Celeritas Shaders";
+    private static final Logger LOGGER = LogManager.getLogger("Pintonium-Shaders");
+    private static final String MODNAME = "Pintonium Shaders";
     private static final BufferPoolMXBean iris$directPool;
     private static final List<BufferPoolMXBean> iris$pools = ManagementFactory.getPlatformMXBeans(BufferPoolMXBean.class);
 

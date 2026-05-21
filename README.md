@@ -1,9 +1,9 @@
 <img src="modern/src/main/resources/icon.png" width="128">
 
-# Celeritas
+# Pintonium
 
-Celeritas is a free and open-source performance & shaders mod for Minecraft clients. It is a fork of Embeddium (which itself
-was based on the last FOSS-licensed version of Sodium) and Oculus 1.7.
+Pintonium is a free and open-source performance & shaders mod for Minecraft clients. It is a fork of Celeritas, which
+itself is based on Embeddium, the last FOSS-licensed version of Sodium, and Oculus 1.7.
 
 I maintain this mod for personal use & experimentation and make the source code available for other projects and
 developers who may be interested. There is also no guarantee of active maintenance, including bugfixes
@@ -11,24 +11,21 @@ or ports to any newer Minecraft versions. That said, the code remains
 LGPL-3.0, so other projects under a compatible license (including Embeddium) should feel free to incorporate bugfixes
 and features they find useful. That said, expect minimal support, and many possible bugs due to limited testing.
 
-**Important note:** There are currently no official Celeritas binary releases. If you download a precompiled
-Celeritas .jar file from any 3rd party source, we cannot provide any support for such files, and you do so at your own
-risk. As of writing, the only official distribution of Celeritas available is the original source code
-at https://git.taumc.org/embeddedt/celeritas, 
+**Important note:** There are currently no official Pintonium binary releases. If you download a precompiled
+Pintonium .jar file from any 3rd party source, we cannot provide any support for such files, and you do so at your own
+risk.
 
 ## Project layout
 
-Celeritas uses the [Stonecutter](https://codeberg.org/stonecutter/stonecutter) toolchain to reduce the effort required
+Pintonium uses the [Stonecutter](https://codeberg.org/stonecutter/stonecutter) toolchain to reduce the effort required
 to support individual Minecraft versions. Additionally, as much core rendering code as possible is fully abstracted
-from Minecraft within a `:common` project. The common module is published on
-[Maven](https://maven.taumc.org/#/releases/org/embeddedt/celeritas/celeritas-common), to allow downstream projects to
-consume it without rebuilding the entire project from source. However, the production mod jars are not available on Maven.
+from Minecraft within a `:common` project.
 
 ## How to build
 
 The fastest way to build for exactly one version target is to run `./gradlew -Ptarget_versions=<version> packageJar`.
 This command avoids configuring as many Minecraft targets as possible. The resulting jar file will be available
-in `build/libs/<celeritas version>`.
+in `build/libs/<pintonium version>`.
 
 Note: the `target_versions` property accepts a standard Stonecutter predicate, so you can also use syntax like
 `./gradlew -Ptarget_versions="<1.8.9"`.
@@ -40,7 +37,7 @@ To build for every Minecraft version at once, execute `./gradlew packageJar`.
 
 ## How to use
 
-Celeritas generally requires a "modernized" environment on older Minecraft versions, and will not run out-of-the-box
+Pintonium generally requires a "modernized" environment on older Minecraft versions, and will not run out-of-the-box
 with a default modded Minecraft instance. Newer Minecraft versions ship with the necessary dependencies and will not
 require any custom setup.
 
@@ -56,7 +53,7 @@ or 21 are not required, unless the underlying Minecraft version itself requires 
 
 ## License
 
-Celeritas is licensed under the Lesser GNU General Public License version 3, as it only uses code from Iris 1.7,
+Pintonium is licensed under the Lesser GNU General Public License version 3, as it uses code from its upstream fork, Iris 1.7,
 Sodium 0.5.11-, and other FOSS projects.
 
 Portions of the option screen code are based on Reese's Sodium Options by FlashyReese, and are used under the terms of

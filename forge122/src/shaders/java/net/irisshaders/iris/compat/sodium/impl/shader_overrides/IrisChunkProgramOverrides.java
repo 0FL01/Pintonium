@@ -122,7 +122,7 @@ public class IrisChunkProgramOverrides {
             try {
                 this.programs.put(pass, createShader(pass, pipeline, configuration));
             } catch (RuntimeException e) {
-                IRIS_LOGGER.warn("Failed to create Iris terrain shader override for pass {}. This pass will use Celeritas' vanilla shader.", pass, e);
+                IRIS_LOGGER.warn("Failed to create Iris terrain shader override for pass {}. This pass will use Pintonium's vanilla shader.", pass, e);
                 this.programs.put(pass, null);
             }
         }
@@ -150,7 +150,7 @@ public class IrisChunkProgramOverrides {
             try {
                 createShaders(sodiumTerrainPipeline, configuration);
             } catch (RuntimeException e) {
-                IRIS_LOGGER.error("Failed to prepare Iris terrain shader overrides. Terrain will fall back to Celeritas' vanilla shader path.", e);
+                IRIS_LOGGER.error("Failed to prepare Iris terrain shader overrides. Terrain will fall back to Pintonium's vanilla shader path.", e);
                 deleteShaders();
                 shadersCreated = true;
                 return null;

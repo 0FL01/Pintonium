@@ -1,7 +1,7 @@
 [
   {
     "modid": "celeritas",
-    "name": "Celeritas",
+    "name": "Pintonium",
     "description": "An open-source client performance mod for Minecraft",
     "version": "${version}",
     "mcversion": "1.12.2",

@@ -219,13 +219,23 @@ public class IrisVintage implements CeleritasShaderVersionService {
     @Override
     public void onLoadingComplete() {
         installVanillaStateResetter();
-        IrisCommon.getPipelineManager().preparePipeline(getCurrentDimension());
+
+        if (MinecraftVersionShimService.MINECRAFT_SHIM.isLevelLoaded()) {
+            IrisCommon.getPipelineManager().preparePipeline(getCurrentDimension());
+            resetVanillaGlState();
+        } else if (!isShaderPackActive()) {
+            IrisCommon.getPipelineManager().preparePipeline(DimensionId.OVERWORLD);
+        }
     }
 
     @Override
     public void destroyEverything() {
         IrisCommon.getPipelineManager().destroyPipeline();
-        resetVanillaGlState();
+        if (MinecraftVersionShimService.MINECRAFT_SHIM.isLevelLoaded()) {
+            resetVanillaGlState();
+        } else {
+            resetMenuGlState();
+        }
     }
 
     @Override
@@ -261,6 +271,10 @@ public class IrisVintage implements CeleritasShaderVersionService {
 
             if (MinecraftVersionShimService.MINECRAFT_SHIM.isLevelLoaded()) {
                 IrisCommon.getPipelineManager().preparePipeline(getCurrentDimension());
+                resetVanillaGlState();
+            } else if (!isShaderPackActive()) {
+                IrisCommon.getPipelineManager().preparePipeline(DimensionId.OVERWORLD);
+                resetMenuGlState();
             }
         } catch (IOException e) {
             IRIS_LOGGER.error("Error reloading shader pack while applying changes!", e);
@@ -268,18 +282,29 @@ public class IrisVintage implements CeleritasShaderVersionService {
     }
 
     public static void resetVanillaGlState() {
-        installVanillaStateResetter();
-        MinecraftVersionShimService.MINECRAFT_SHIM.bindMainFramebuffer();
-        GL_STATE_MANAGER.glUseProgram(0);
-        Minecraft minecraft = Minecraft.getMinecraft();
+        resetGlState(true);
+    }
 
-        if (minecraft.getFramebuffer() != null) {
-            GL11.glViewport(0, 0, minecraft.getFramebuffer().framebufferWidth, minecraft.getFramebuffer().framebufferHeight);
+    public static void resetMenuGlState() {
+        resetGlState(false);
+    }
+
+    private static void resetGlState(boolean bindWorldTextures) {
+        installVanillaStateResetter();
+        Minecraft minecraft = Minecraft.getMinecraft();
+        if (minecraft.getFramebuffer() == null) {
+            return;
         }
 
-        GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
-        resetDrawBufferArray();
-        GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+        MinecraftVersionShimService.MINECRAFT_SHIM.bindMainFramebuffer();
+        GL_STATE_MANAGER.glUseProgram(0);
+
+        GL11.glViewport(0, 0, minecraft.getFramebuffer().framebufferWidth, minecraft.getFramebuffer().framebufferHeight);
+
+        int drawBuffer = OpenGlHelper.isFramebufferEnabled() ? GL30.GL_COLOR_ATTACHMENT0 : GL11.GL_BACK;
+        GL11.glDrawBuffer(drawBuffer);
+        resetDrawBufferArray(drawBuffer);
+        GL11.glReadBuffer(drawBuffer);
         GlStateManager.colorMask(true, true, true, true);
         GlStateManager.depthMask(true);
         GlStateManager.enableDepth();
@@ -290,7 +315,7 @@ public class IrisVintage implements CeleritasShaderVersionService {
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
 
-        if (minecraft.entityRenderer != null) {
+        if (bindWorldTextures && minecraft.entityRenderer != null) {
             int lightmapTexture = ((MixinEntityRendererLightmapAccessor) minecraft.entityRenderer).celeritas$getLightmapTexture().getGlTextureId();
             GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
             GL13.glActiveTexture(OpenGlHelper.lightmapTexUnit);
@@ -301,12 +326,16 @@ public class IrisVintage implements CeleritasShaderVersionService {
             GL13.glActiveTexture(OpenGlHelper.defaultTexUnit);
         }
 
-        if (minecraft.getTextureMapBlocks() != null) {
+        if (bindWorldTextures && minecraft.getTextureMapBlocks() != null) {
             int blockAtlasTexture = minecraft.getTextureMapBlocks().getGlTextureId();
             GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
             GL13.glActiveTexture(OpenGlHelper.defaultTexUnit);
             GlStateManager.bindTexture(blockAtlasTexture);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, blockAtlasTexture);
+            GlStateManager.enableTexture2D();
+        } else {
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+            GL13.glActiveTexture(OpenGlHelper.defaultTexUnit);
             GlStateManager.enableTexture2D();
         }
     }
@@ -321,11 +350,15 @@ public class IrisVintage implements CeleritasShaderVersionService {
         GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, 0);
     }
 
-    private static void resetDrawBufferArray() {
+    private static void resetDrawBufferArray(int drawBuffer) {
         IntBuffer drawBuffers = BufferUtils.createIntBuffer(1);
-        drawBuffers.put(GL30.GL_COLOR_ATTACHMENT0);
+        drawBuffers.put(drawBuffer);
         drawBuffers.flip();
         GL20.glDrawBuffers(drawBuffers);
+    }
+
+    private static boolean isShaderPackActive() {
+        return IrisCommon.getIrisConfig().areShadersEnabled() && IrisCommon.getCurrentPack().isPresent();
     }
 
     public static NamespacedId getCurrentDimension() {

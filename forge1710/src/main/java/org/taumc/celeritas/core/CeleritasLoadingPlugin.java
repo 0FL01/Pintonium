@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-@IFMLLoadingPlugin.Name("Celeritas")
+@IFMLLoadingPlugin.Name("Pintonium")
 @IFMLLoadingPlugin.MCVersion("1.7.10")
 public class CeleritasLoadingPlugin implements IFMLLoadingPlugin, IEarlyMixinLoader {
     @Override

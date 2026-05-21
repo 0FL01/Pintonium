@@ -41,7 +41,9 @@ public class WorldRenderingSettings {
 
     public void reloadRendererIfRequired() {
         if (isReloadRequired()) {
-            MINECRAFT_SHIM.markRendererReloadRequired();
+            if (MINECRAFT_SHIM.isLevelLoaded()) {
+                MINECRAFT_SHIM.markRendererReloadRequired();
+            }
             clearReloadRequired();
         }
     }

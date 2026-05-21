@@ -24,7 +24,7 @@ val minecraftVersion = project.name
 
 val versionData = versionDataMap.getValue(project.name)
 
-base.archivesName = "celeritas-forge-${project.name}"
+base.archivesName = "pintonium-forge-${project.name}"
 
 val modCompileOnly by configurations.creating
 configurations.compileOnly.get().extendsFrom(modCompileOnly)

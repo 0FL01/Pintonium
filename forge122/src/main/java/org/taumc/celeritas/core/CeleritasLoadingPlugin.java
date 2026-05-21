@@ -7,7 +7,7 @@ import zone.rong.mixinbooter.IEarlyMixinLoader;
 import java.util.List;
 import java.util.Map;
 
-@IFMLLoadingPlugin.Name("Celeritas")
+@IFMLLoadingPlugin.Name("Pintonium")
 @IFMLLoadingPlugin.MCVersion("1.12.2")
 public class CeleritasLoadingPlugin implements IFMLLoadingPlugin, IEarlyMixinLoader {
     @Override

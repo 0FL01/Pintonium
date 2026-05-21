@@ -20,11 +20,11 @@ import java.util.*;
 import java.util.stream.Stream;
 
 public class CeleritasArchaicMixinPlugin implements IMixinConfigPlugin {
-    public static final Logger LOGGER = LogManager.getLogger("CeleritasMixins");
+    public static final Logger LOGGER = LogManager.getLogger("PintoniumMixins");
 
     @Override
     public void onLoad(String mixinPackage) {
-        LOGGER.info("Loaded Celeritas mixin plugin");
+        LOGGER.info("Loaded Pintonium mixin plugin");
         // Hack for now
         var handle = SharedConfig.getRfbTransformers().stream().filter(transformer -> transformer.id().equals("lwjgl3ify:redirect")).findFirst().orElseThrow();
         handle.exclusions().add("org.embeddedt.embeddium");
