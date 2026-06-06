@@ -253,10 +253,16 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
     public void sodium$renderTileEntities(Entity entity, ICamera camera, float partialTicks, CallbackInfo ci) {
         VintageIrisRenderingPipeline irisEntityPipeline = this.celeritas$getVintageIrisPipeline();
         boolean irisBlockEntityRendering = irisEntityPipeline != null && irisEntityPipeline.beginVintageBlockEntityRendering();
+        Runnable prepareBlockEntityRenderState = () -> {
+            this.celeritas$prepareVanillaEntityRenderState(!irisBlockEntityRendering, false, partialTicks);
+            if (irisBlockEntityRendering) {
+                irisEntityPipeline.updateVintageBlockEntityUniforms();
+            }
+        };
 
         try {
-            this.celeritas$prepareVanillaEntityRenderState(!irisBlockEntityRendering, false, partialTicks);
-            this.renderer.renderBlockEntities(new CeleritasWorldRenderer.TileEntityRenderContext(damagedBlocks, partialTicks));
+            prepareBlockEntityRenderState.run();
+            this.renderer.renderBlockEntities(new CeleritasWorldRenderer.TileEntityRenderContext(damagedBlocks, partialTicks, prepareBlockEntityRenderState));
         } finally {
             if (irisBlockEntityRendering) {
                 irisEntityPipeline.endVintageBlockEntityRendering();

@@ -365,6 +365,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
 
     private void createVintageHandCompatibilityProgram() {
         ProgramSource source = this.resolver.resolve(ProgramId.HandWater).orElse(null);
+        boolean usingHandWaterSource = source != null && source.isValid();
         if (source == null || !source.isValid()) {
             source = this.resolver.resolve(ProgramId.Hand).orElse(null);
         }
@@ -374,13 +375,16 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         }
 
         try {
-            ProgramSource waterSource = this.resolver.resolve(ProgramId.Water).orElse(null);
-            int[] drawBuffers = this.celeritas$mergeDrawBuffers(this.celeritas$drawBuffersOrDefault(source), waterSource);
+            int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
+            if (usingHandWaterSource) {
+                ProgramSource waterSource = this.resolver.resolve(ProgramId.Water).orElse(null);
+                drawBuffers = this.celeritas$mergeDrawBuffers(drawBuffers, waterSource);
+            }
             ProgramBuilder builder = ProgramBuilder.begin(
                     source.getName() + "_celeritas_hand_compat",
                     this.celeritas$getLegacyCompatibilityVertexSource(),
                     null,
-                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, true, false, false, false, false, true),
+                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, true, false, false, false, false),
                     IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
 
             builder.addExternalSampler(IrisSamplers.ALBEDO_TEXTURE_UNIT, "tex", "texture", "gtexture");
@@ -736,6 +740,24 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         GbufferPrograms.runPhaseChangeNotifier();
         this.vintageBlockEntityCompatRenderingActive = false;
         this.bindDefault();
+    }
+
+    public void updateVintageBlockEntityUniforms() {
+        if (!this.vintageBlockEntityCompatRenderingActive || this.vintageBlockEntityCompatProgram == null) {
+            return;
+        }
+
+        GlFramebuffer framebuffer = this.isBeforeTranslucent
+                ? this.vintageBlockEntityCompatFramebufferBeforeTranslucent
+                : this.vintageBlockEntityCompatFramebufferAfterTranslucent;
+
+        if (framebuffer != null) {
+            framebuffer.bind();
+        }
+
+        this.celeritas$applyBlendOverrides(this.vintageBlockEntityCompatBlendOverride, this.vintageBlockEntityCompatBufferBlendOverrides);
+        this.vintageBlockEntityCompatProgram.use();
+        this.bindVintageEntityLightmap();
     }
 
     public boolean beginVintageParticleRendering() {

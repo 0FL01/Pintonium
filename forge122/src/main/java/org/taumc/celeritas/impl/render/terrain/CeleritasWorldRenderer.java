@@ -4,10 +4,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.DestroyBlockProgress;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
 import net.minecraft.entity.Entity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.client.MinecraftForgeClient;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
@@ -27,7 +29,7 @@ import java.util.*;
  * Provides an extension to vanilla's {@link net.minecraft.client.renderer.RenderGlobal}.
  */
 public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, VintageRenderSectionManager, BlockRenderLayer, TileEntity, CeleritasWorldRenderer.TileEntityRenderContext>  {
-    public record TileEntityRenderContext(Map<Integer, DestroyBlockProgress> damagedBlocks, float partialTicks) {}
+    public record TileEntityRenderContext(Map<Integer, DestroyBlockProgress> damagedBlocks, float partialTicks, Runnable prepareRenderState) {}
 
     /**
      * @return The CeleritasWorldRenderer based on the current dimension
@@ -94,6 +96,8 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
                 continue;
 
             try {
+                tileEntityRenderContext.prepareRenderState.run();
+                this.prepareBlockEntityLightmapCoordinates(tileEntity);
                 TileEntityRendererDispatcher.instance.render(tileEntity, partialTicks, -1);
                 rendered++;
             } catch(RuntimeException e) {
@@ -113,8 +117,25 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
         int pass = MinecraftForgeClient.getRenderPass();
         TileEntityRendererDispatcher.instance.preDrawBatch();
         int rendered = super.renderBlockEntities(tileEntityRenderContext);
+        tileEntityRenderContext.prepareRenderState.run();
         TileEntityRendererDispatcher.instance.drawBatch(pass);
         return rendered;
+    }
+
+    private void prepareBlockEntityLightmapCoordinates(TileEntity tileEntity) {
+        if (tileEntity == null || tileEntity.getWorld() == null || tileEntity.getPos() == null) {
+            return;
+        }
+
+        BlockPos pos = tileEntity.getPos();
+        if (!tileEntity.getWorld().isBlockLoaded(pos, false)) {
+            return;
+        }
+
+        int packedLight = tileEntity.getWorld().getCombinedLight(pos, 0);
+        OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit,
+                (float) (packedLight & 0xFFFF),
+                (float) (packedLight >> 16));
     }
 
     /**

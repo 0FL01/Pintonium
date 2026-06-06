@@ -287,7 +287,14 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             return mappedIdForBlocks(mappedBlockIds, Blocks.TALLGRASS, Blocks.SAPLING, Blocks.YELLOW_FLOWER, Blocks.RED_FLOWER);
         }
 
-        return -1;
+        return genericMaterialFallbackId();
+    }
+
+    private static int genericMaterialFallbackId() {
+        // Unknown modded blocks should not be guessed as stone/iron/wood here:
+        // shaderpacks attach PBR, POM, emissive, and lighting rules to those IDs.
+        // Material 0 keeps the texture in the shader's neutral path.
+        return 0;
     }
 
     private static int mappedIdForBlocks(Object2IntMap<IBlockState> mappedBlockIds, Block... blocks) {
