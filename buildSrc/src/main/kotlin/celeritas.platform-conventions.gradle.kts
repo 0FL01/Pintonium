@@ -134,7 +134,7 @@ val modMixinConfigs = mutableListOf("embeddium.mixins.json")
 project.extra.set("celeritasMixinConfigs", modMixinConfigs)
 
 if (generateSequence(project) { it.parent }.any { it.name == "modern" }) {
-    if (stonecutterExt.constants.getOrDefault("settings_gui", false)) {
+    if (stonecutterExt.constants.getting("settings_gui").orElse(false).get()) {
         sourceSets {
             main {
                 java.srcDir("src/main/gui_java")

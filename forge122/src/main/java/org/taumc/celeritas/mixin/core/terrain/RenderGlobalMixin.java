@@ -68,6 +68,9 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
     @Unique
     private static final float celeritas$NO_SKYLIGHT_ENTITY_LIGHT_FLOOR = 160.0F;
 
+    @Unique
+    private static final int celeritas$IRIS_ENTITY_ATTRIBUTE_INDEX = 11;
+
     @Shadow
     @Final
     private Map<Integer, DestroyBlockProgress> damagedBlocks;
@@ -447,6 +450,13 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         for (int attribute = 0; attribute < 16; attribute++) {
             GL20.glDisableVertexAttribArray(attribute);
         }
+
+        GL30.glVertexAttribI3i(celeritas$IRIS_ENTITY_ATTRIBUTE_INDEX, 0, 0, 0);
+    }
+
+    @Unique
+    private void celeritas$setIrisEntityAttribute(int shaderEntityId) {
+        GL30.glVertexAttribI3i(celeritas$IRIS_ENTITY_ATTRIBUTE_INDEX, shaderEntityId, 0, 0);
     }
 
     @Unique
@@ -545,14 +555,19 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
                 {
                     ++this.countEntitiesRendered;
 
+                    int shaderEntityId = 0;
                     if (irisEntityRendering) {
-                        CapturedRenderingState.INSTANCE.setCurrentEntity(this.celeritas$getEntityShaderId(entity));
+                        shaderEntityId = this.celeritas$getEntityShaderId(entity);
+                        CapturedRenderingState.INSTANCE.setCurrentEntity(shaderEntityId);
                         CapturedRenderingState.INSTANCE.setCurrentRenderedItem(0);
                         irisEntityPipeline.updateVintageEntityUniforms();
                     }
 
                     this.celeritas$prepareVanillaEntityRenderState(!irisEntityRendering, attenuateEntitySkyLight, partialTicks);
-                    this.celeritas$prepareEntityLightmapCoordinates(entity, false, partialTicks);
+                    if (irisEntityRendering) {
+                        this.celeritas$setIrisEntityAttribute(shaderEntityId);
+                    }
+                    this.celeritas$prepareEntityLightmapCoordinates(entity, attenuateEntitySkyLight, partialTicks);
                     this.renderManager.renderEntityStatic(entity, partialTicks, false);
 
                     if (this.isOutlineActive(entity, renderViewEntity, camera))
@@ -586,13 +601,17 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
 
         try {
             if (irisEntityRendering) {
-                CapturedRenderingState.INSTANCE.setCurrentEntity(this.celeritas$getEntityShaderId(entity));
+                int shaderEntityId = this.celeritas$getEntityShaderId(entity);
+                CapturedRenderingState.INSTANCE.setCurrentEntity(shaderEntityId);
                 CapturedRenderingState.INSTANCE.setCurrentRenderedItem(0);
                 irisEntityPipeline.updateVintageEntityUniforms();
+                this.celeritas$prepareVanillaEntityRenderState(!irisEntityRendering, attenuateEntitySkyLight, partialTicks);
+                this.celeritas$setIrisEntityAttribute(shaderEntityId);
+            } else {
+                this.celeritas$prepareVanillaEntityRenderState(!irisEntityRendering, attenuateEntitySkyLight, partialTicks);
             }
 
-            this.celeritas$prepareVanillaEntityRenderState(!irisEntityRendering, attenuateEntitySkyLight, partialTicks);
-            this.celeritas$prepareEntityLightmapCoordinates(entity, false, partialTicks);
+            this.celeritas$prepareEntityLightmapCoordinates(entity, attenuateEntitySkyLight, partialTicks);
             renderManager.renderMultipass(entity, partialTicks);
         } finally {
             if (irisEntityRendering) {

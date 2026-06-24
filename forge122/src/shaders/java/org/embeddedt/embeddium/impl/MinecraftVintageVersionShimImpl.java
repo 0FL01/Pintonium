@@ -53,8 +53,6 @@ public class MinecraftVintageVersionShimImpl implements MinecraftVersionShimServ
     private static final boolean DEVELOPMENT_ENVIRONMENT = Boolean.TRUE.equals(Launch.blackboard.get("fml.deobfuscatedEnvironment"));
     private static final float DISABLED_SHADOW_SPACE_SCALE = 1.0E-6F;
 
-    private final Vector3d scratchVector3d = new Vector3d();
-
     @Override
     public boolean isOnOSX() {
         return Minecraft.IS_RUNNING_ON_MAC;
@@ -94,14 +92,14 @@ public class MinecraftVintageVersionShimImpl implements MinecraftVersionShimServ
     public Vector3d getUnshiftedCameraPosition() {
         Entity camera = CLIENT.getRenderViewEntity();
         if (camera == null) {
-            return ZERO3D;
+            return new Vector3d();
         }
 
         float tickDelta = CapturedRenderingState.INSTANCE.getTickDelta();
         double x = camera.lastTickPosX + (camera.posX - camera.lastTickPosX) * tickDelta;
         double y = camera.lastTickPosY + (camera.posY - camera.lastTickPosY) * tickDelta;
         double z = camera.lastTickPosZ + (camera.posZ - camera.lastTickPosZ) * tickDelta;
-        return this.scratchVector3d.set(x, y, z);
+        return new Vector3d(x, y, z);
     }
 
     @Override
@@ -289,10 +287,10 @@ public class MinecraftVintageVersionShimImpl implements MinecraftVersionShimServ
     public Vector3d getEyePosition() {
         Entity camera = CLIENT.getRenderViewEntity();
         if (camera == null) {
-            return ZERO3D;
+            return new Vector3d();
         }
 
-        return this.scratchVector3d.set(camera.posX, camera.posY + camera.getEyeHeight(), camera.posZ);
+        return new Vector3d(camera.posX, camera.posY + camera.getEyeHeight(), camera.posZ);
     }
 
     @Override

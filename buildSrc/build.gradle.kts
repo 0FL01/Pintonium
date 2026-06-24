@@ -11,11 +11,12 @@ dependencies {
     implementation("org.ow2.asm:asm-commons:9.6")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.apache.commons:commons-compress:1.26.0")
-    implementation("com.gradleup.shadow:shadow-gradle-plugin:8.3.0")
-    implementation("dev.kikugie:stonecutter:0.7-beta.2")
+    implementation("com.gradleup.shadow:com.gradleup.shadow.gradle.plugin:9.4.2")
+    implementation("dev.kikugie.stonecutter:dev.kikugie.stonecutter.gradle.plugin:0.9.6")
 }
 
 repositories {
+    gradlePluginPortal()
     mavenCentral()
     maven("https://maven.fabricmc.net/")
     maven("https://maven.kikugie.dev/releases")

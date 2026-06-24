@@ -2,6 +2,7 @@ package org.embeddedt.embeddium.gradle.unimined;
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar;
 import kotlin.Unit;
+import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.Project;
 import org.gradle.jvm.tasks.Jar;
 import org.gradle.language.jvm.tasks.ProcessResources;
@@ -33,22 +34,23 @@ public class ProductionJarHelper {
     }
 
     public static void createShadowRemapJar(Project project) {
+        var remapJarTask = project.getTasks().named("remapJar");
         project.getTasks().named("shadowJar").configure(task -> {
             if (task instanceof ShadowJar shadowJar) {
-                shadowJar.setConfigurations(List.of());
+                shadowJar.getConfigurations().set(List.<Configuration>of());
             }
         });
         project.getTasks().register("shadowRemapJar", ShadowJar.class).configure(shadowJar -> {
             shadowJar.getArchiveClassifier().set("");
-            shadowJar.setConfigurations(List.of(project.getConfigurations().getByName("shadow")));
-            shadowJar.from(project.getTasks().named("remapJar"));
+            shadowJar.getConfigurations().set(List.of(project.getConfigurations().getByName("shadow")));
+            shadowJar.dependsOn(remapJarTask);
+            shadowJar.from(project.provider(() -> project.zipTree(((RemapJarTask)remapJarTask.get()).getAsJar().getArchiveFile().get().getAsFile())));
             shadowJar.getManifest().inheritFrom(((Jar)project.getTasks().getByName("jar")).getManifest());
             shadowJar.relocate("org.joml", "org.embeddedt.embeddium.impl.shadow.joml");
             shadowJar.mergeServiceFiles();
 
             shadowJar.from("COPYING", "COPYING.LESSER", "README.md");
         });
-        var remapJarTask = project.getTasks().named("remapJar");
         remapJarTask.configure(task -> {
             if (task instanceof RemapJarTask remapJar) {
                 remapJar.mixinRemap(m -> {

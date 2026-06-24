@@ -8,7 +8,7 @@ plugins {
     id("org.taumc.gradle.publishing")
 }
 
-project.version = tau.versioning.version(rootProject.properties["project_base_version"].toString(), rootProject.properties["release_channel"])
+project.version = tau.versioning.version(rootProject.property("project_base_version").toString(), rootProject.findProperty("release_channel"))
 println("Pintonium: ${tau.versioning.version}")
 
 //project(":forge1710")
@@ -74,7 +74,7 @@ val publishTask = tau.publishing.publish {
                 minecraftVersionRange = bs.ModLoader.getMinecraftVersion(name)
                 javaVersions.add(JavaVersion.VERSION_21)
 
-                environment = ModEnvironment.CLIENT_ONLY
+                environment.set(ModEnvironment.CLIENT_ONLY)
 
                 modLoaders.add(when(ourLoader) {
                     bs.ModLoader.FABRIC -> ModLoader.FABRIC

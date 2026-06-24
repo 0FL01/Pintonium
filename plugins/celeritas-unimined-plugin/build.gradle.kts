@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation("com.gradleup.shadow:shadow-gradle-plugin:8.3.0")
+    implementation("com.gradleup.shadow:com.gradleup.shadow.gradle.plugin:9.4.2")
     implementation("xyz.wagyourtail.unimined:xyz.wagyourtail.unimined.gradle.plugin:1.3.15-SNAPSHOT")
 }
 

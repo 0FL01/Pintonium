@@ -116,6 +116,18 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private boolean vintageHandCompatRenderingActive;
     private boolean vintageHandCompatBridgeLogged;
 
+    @Nullable
+    private Program vintageLineProgram;
+    @Nullable
+    private GlFramebuffer vintageLineFramebufferBeforeTranslucent;
+    @Nullable
+    private GlFramebuffer vintageLineFramebufferAfterTranslucent;
+    @Nullable
+    private BlendModeOverride vintageLineBlendOverride;
+    private List<BufferBlendOverride> vintageLineBufferBlendOverrides = Collections.emptyList();
+    private boolean vintageLineRenderingActive;
+    private boolean vintageLineBridgeLogged;
+
     public VintageIrisRenderingPipeline(ProgramSet programSet) {
         super(programSet);
         this.createVintageEntityProgram();
@@ -124,6 +136,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.createVintageParticleCompatibilityProgram();
         this.createVintageBeaconBeamProgram();
         this.createVintageHandCompatibilityProgram();
+        this.createVintageLineProgram();
         this.vintageEntityFallbackFramebuffer = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, new int[] {0});
     }
 
@@ -216,11 +229,15 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
 
         try {
             int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
+            boolean solasStyleEntityLayout = this.celeritas$isColorAndAuxBufferLayout(drawBuffers);
+            // If the pack entity program cannot be used, keep the fallback restrained for
+            // Solas-style color+aux layouts so the generic bridge does not over-brighten mobs.
+            boolean useDirectEntityLightmapColor = solasStyleEntityLayout;
             ProgramBuilder builder = ProgramBuilder.begin(
                     source.getName() + "_celeritas_legacy_compat",
                     this.celeritas$getLegacyCompatibilityVertexSource(),
                     null,
-                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, true, true, false, true, true),
+                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, true, true, useDirectEntityLightmapColor, true, true, false, solasStyleEntityLayout),
                     IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
 
             builder.addExternalSampler(IrisSamplers.ALBEDO_TEXTURE_UNIT, "tex", "texture", "gtexture");
@@ -259,7 +276,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
                     source.getName() + "_celeritas_block_entity_compat",
                     this.celeritas$getLegacyCompatibilityVertexSource(),
                     null,
-                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, false, false, !solasStyleBlockLayout, false, false),
+                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, false, false, !solasStyleBlockLayout, false, false, false, solasStyleBlockLayout),
                     IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
 
             builder.addExternalSampler(IrisSamplers.ALBEDO_TEXTURE_UNIT, "tex", "texture", "gtexture");
@@ -410,6 +427,46 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         }
     }
 
+    private void createVintageLineProgram() {
+        ProgramSource source = this.resolver.resolve(ProgramId.Basic).orElse(null);
+        if (source == null || !source.isValid()) {
+            return;
+        }
+
+        try {
+            int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
+            ProgramBuilder builder = ProgramBuilder.begin(
+                    source.getName() + "_celeritas_line",
+                    source.getSourceNullable(ShaderType.VERTEX),
+                    source.getSourceNullable(ShaderType.GEOMETRY),
+                    source.getSourceNullable(ShaderType.FRAGMENT),
+                    IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
+
+            CommonUniforms.addCommonUniforms(builder, this.pack.getIdMap(), this.packDirectives, this.updateNotifier, FogMode.PER_VERTEX);
+            this.customUniforms.assignTo(builder);
+            this.addGbufferOrShadowSamplers(builder, builder, () -> this.isBeforeTranslucent ? this.flippedAfterPrepare : this.flippedAfterTranslucent,
+                    false, true, true, false);
+
+            this.vintageLineProgram = builder.build();
+            this.customUniforms.mapholderToPass(builder, this.vintageLineProgram);
+            this.vintageLineFramebufferBeforeTranslucent = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, drawBuffers);
+            this.vintageLineFramebufferAfterTranslucent = this.renderTargets.createGbufferFramebuffer(this.flippedAfterTranslucent, drawBuffers);
+            this.vintageLineBlendOverride = source.getDirectives().getBlendModeOverride().orElse(ProgramId.Basic.getBlendModeOverride());
+            this.vintageLineBufferBlendOverrides = this.celeritas$createBufferBlendOverrides(source);
+        } catch (RuntimeException e) {
+            if (this.vintageLineProgram != null) {
+                this.vintageLineProgram.delete();
+            }
+
+            this.vintageLineProgram = null;
+            this.vintageLineFramebufferBeforeTranslucent = null;
+            this.vintageLineFramebufferAfterTranslucent = null;
+            this.vintageLineBlendOverride = null;
+            this.vintageLineBufferBlendOverrides = Collections.emptyList();
+            IRIS_LOGGER.warn("Failed to create the 1.12 selection outline shader bridge. Selection outlines will use the active vanilla render state.", e);
+        }
+    }
+
     private void celeritas$addLegacyCompatibilityUniforms(ProgramBuilder builder) {
         builder.uniform1f(UniformUpdateFrequency.PER_FRAME, "celeritasDaylight", this::celeritas$getDaylightFactor);
         builder.uniform1b(UniformUpdateFrequency.PER_FRAME, "celeritasNoSkylightDimension", this::celeritas$isNoSkylightDimension);
@@ -470,11 +527,8 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private boolean celeritas$prefersShaderPackEntityProgram(ProgramSource source) {
         int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
 
-        // Solas-style entity programs write only color plus their own auxiliary lighting buffer.
-        // The generic compatibility bridge cannot reproduce that shader-specific lighting, so
-        // prefer the real pack program when the 1.12 fixed-function vertex data is sufficient.
-        return this.celeritas$isColorAndAuxBufferLayout(drawBuffers)
-                && this.vintageEntityProgram != null && this.vintageEntityFramebuffer != null;
+        // Solas-style programs own their deferred entity lighting; use them when available.
+        return this.vintageEntityProgram != null && this.vintageEntityFramebuffer != null;
     }
 
     private boolean celeritas$isColorAndAuxBufferLayout(int[] drawBuffers) {
@@ -532,6 +586,10 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     }
 
     private String celeritas$getLegacyCompatibilityFragmentSource(int[] drawBuffers, boolean entityPass, boolean clampEntityLight, boolean directLightmapColor, boolean attenuateSkyLight, boolean floorNoSkylightEntityLight, boolean clearTranslucentAux) {
+        return this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, entityPass, clampEntityLight, directLightmapColor, attenuateSkyLight, floorNoSkylightEntityLight, clearTranslucentAux, false);
+    }
+
+    private String celeritas$getLegacyCompatibilityFragmentSource(int[] drawBuffers, boolean entityPass, boolean clampEntityLight, boolean directLightmapColor, boolean attenuateSkyLight, boolean floorNoSkylightEntityLight, boolean clearTranslucentAux, boolean capBlockLight) {
         StringBuilder source = new StringBuilder();
         source.append("#version 130\n")
                 .append("uniform sampler2D tex;\n")
@@ -542,6 +600,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
                 .append("const bool celeritasDirectLightmapColor = ").append(directLightmapColor ? "true" : "false").append(";\n")
                 .append("const bool celeritasAttenuateSkyLight = ").append(attenuateSkyLight ? "true" : "false").append(";\n")
                 .append("const bool celeritasFloorNoSkylightEntityLight = ").append(floorNoSkylightEntityLight ? "true" : "false").append(";\n")
+                .append("const bool celeritasCapBlockLight = ").append(capBlockLight ? "true" : "false").append(";\n")
                 .append("in vec2 vTexCoord;\n")
                 .append("in vec2 vLightCoord;\n")
                 .append("in vec4 vColor;\n")
@@ -552,6 +611,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
                 .append("    if (color.a <= 0.001) discard;\n")
                 .append("    vec2 lmFactor = clamp((vLightCoord - vec2(0.03125)) * 1.06667, vec2(0.0), vec2(1.0));\n")
                 .append("    float compatBlockLight = celeritasClampEntityLight ? min(lmFactor.x, 0.9) : lmFactor.x;\n")
+                .append("    if (celeritasCapBlockLight) compatBlockLight = min(compatBlockLight, 0.9333);\n")
                 .append("    float compatSkyLight = lmFactor.y * (celeritasAttenuateSkyLight ? celeritasDaylight : 1.0);\n")
                 .append("    if (celeritasFloorNoSkylightEntityLight && celeritasNoSkylightDimension) compatSkyLight = max(compatSkyLight, 0.66667);\n")
                 .append("    float compatLight = max(compatBlockLight, compatSkyLight);\n")
@@ -847,6 +907,56 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.bindDefault();
     }
 
+    public boolean beginVintageLineRendering() {
+        if (this.vintageLineProgram == null) {
+            return false;
+        }
+
+        GlFramebuffer framebuffer = this.isBeforeTranslucent
+                ? this.vintageLineFramebufferBeforeTranslucent
+                : this.vintageLineFramebufferAfterTranslucent;
+
+        if (framebuffer == null) {
+            return false;
+        }
+
+        if (!this.vintageLineBridgeLogged) {
+            IRIS_LOGGER.info("Using the shader pack basic program for the 1.12 selection outline bridge.");
+            this.vintageLineBridgeLogged = true;
+        }
+
+        this.removePhaseIfNeeded();
+        framebuffer.bind();
+        GbufferPrograms.beginOutline();
+        GbufferPrograms.runPhaseChangeNotifier();
+        GlStateManager.colorMask(true, true, true, true);
+        GlStateManager.depthMask(true);
+        GlStateManager.enableDepth();
+        GlStateManager.depthFunc(GL11.GL_LEQUAL);
+        GL11.glDepthMask(true);
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        GL11.glDepthFunc(GL11.GL_LEQUAL);
+        this.celeritas$applyBlendOverrides(this.vintageLineBlendOverride, this.vintageLineBufferBlendOverrides);
+        this.vintageLineProgram.use();
+        this.bindVintageEntityLightmap();
+        this.customUniforms.push(this.vintageLineProgram);
+        this.vintageLineRenderingActive = true;
+        return true;
+    }
+
+    public void endVintageLineRendering() {
+        if (!this.vintageLineRenderingActive) {
+            return;
+        }
+
+        Program.unbind();
+        this.celeritas$restoreBlendOverrides(this.vintageLineBlendOverride, this.vintageLineBufferBlendOverrides);
+        GbufferPrograms.endOutline();
+        GbufferPrograms.runPhaseChangeNotifier();
+        this.vintageLineRenderingActive = false;
+        this.bindDefault();
+    }
+
     public boolean beginVintageBeaconBeamRendering() {
         if (this.vintageBeaconBeamProgram == null) {
             return false;
@@ -948,6 +1058,20 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             }
         }
 
+        if (this.vintageLineRenderingActive) {
+            GlFramebuffer framebuffer = this.isBeforeTranslucent
+                    ? this.vintageLineFramebufferBeforeTranslucent
+                    : this.vintageLineFramebufferAfterTranslucent;
+
+            if (framebuffer != null) {
+                framebuffer.bind();
+                this.vintageLineProgram.use();
+                this.bindVintageEntityLightmap();
+                this.customUniforms.push(this.vintageLineProgram);
+                return;
+            }
+        }
+
         this.bindDefault();
     }
 
@@ -1039,6 +1163,11 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         if (this.vintageHandCompatProgram != null) {
             this.vintageHandCompatProgram.delete();
             this.vintageHandCompatProgram = null;
+        }
+
+        if (this.vintageLineProgram != null) {
+            this.vintageLineProgram.delete();
+            this.vintageLineProgram = null;
         }
 
         super.destroy();

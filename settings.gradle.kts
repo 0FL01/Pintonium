@@ -1,4 +1,4 @@
-import dev.kikugie.stonecutter.data.tree.TreeBuilder
+import dev.kikugie.stonecutter.settings.tree.TreeBuilder
 
 pluginManagement {
     repositories {
@@ -119,12 +119,12 @@ fun <T> createStonecutterProject(subprojectFolder: String, versions: List<T>, mc
 }
 
 createStonecutterProject("forge122", listOf("1.12.2", "1.10.2")) { versions ->
-    centralScript = "build.gradle.kts"
+    centralScript.set("build.gradle.kts")
     versions(versions)
 }
 
 createStonecutterProject("babric", listOf("1.2.5", "1.0.0-beta.7.3", "1.0.0-beta.8.1", "1.7.10")) { versions ->
-    centralScript = "build.gradle.kts"
+    centralScript.set("build.gradle.kts")
     versions(versions)
 }
 
@@ -142,7 +142,7 @@ createStonecutterProject("modern", listOf(
     targets.forEach {
         val target = it
         it.loaders.forEach { loader ->
-            val versionConfig = vers(target.friendlyName + "-" + loader, target.semanticName)
+            val versionConfig = version(target.friendlyName + "-" + loader, target.semanticName)
             val buildscriptType = if (loader == "neoforge" || (loader == "forge" && stonecutter.eval(target.semanticName, ">=1.17"))) {
                 "mdg"
             } else if (loader == "forge") {
@@ -152,7 +152,7 @@ createStonecutterProject("modern", listOf(
             } else {
                 throw IllegalArgumentException("Unhandled loader/version combo: ${target.friendlyName}-${loader}")
             }
-            versionConfig.buildscript = "build.${buildscriptType}.gradle.kts"
+            versionConfig.buildscript("build.${buildscriptType}.gradle.kts")
         }
     }
 }
