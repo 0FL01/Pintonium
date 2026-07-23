@@ -3,9 +3,12 @@ package org.taumc.celeritas.impl.render.terrain;
 import com.google.common.collect.ImmutableListMultimap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureMap;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.util.BlockRenderLayer;
+import org.lwjgl.opengl.GL11;
 import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
 import org.embeddedt.embeddium.impl.render.chunk.compile.sorting.QuadPrimitiveType;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
@@ -21,10 +24,7 @@ public class VintageRenderPassConfigurationBuilder {
     private static final TerrainRenderPass.PipelineState MIPMAP_CONTROLLED_STATE = new TerrainRenderPass.PipelineState() {
         @Override
         public void setup() {
-            // Forcefully reset the mipmap state to the expected value for terrain. Mods sometimes manage to corrupt it.
-            boolean mipped = Minecraft.getMinecraft().gameSettings.mipmapLevels > 0;
-            Minecraft.getMinecraft().getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
-            ((AbstractTexture) Minecraft.getMinecraft().getTextureManager().getTexture(TextureMap.LOCATION_BLOCKS_TEXTURE)).setBlurMipmapDirect(false, mipped);
+            resetTerrainTextureState();
         }
 
         @Override
@@ -33,8 +33,33 @@ public class VintageRenderPassConfigurationBuilder {
         }
     };
 
+    private static final TerrainRenderPass.PipelineState TRANSLUCENT_STATE = new TerrainRenderPass.PipelineState() {
+        @Override
+        public void setup() {
+            resetTerrainTextureState();
+            GlStateManager.enableBlend();
+            OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
+        }
+
+        @Override
+        public void clear() {
+            GlStateManager.disableBlend();
+        }
+    };
+
+    private static void resetTerrainTextureState() {
+        // Forcefully reset the mipmap state to the expected value for terrain. Mods sometimes manage to corrupt it.
+        boolean mipped = Minecraft.getMinecraft().gameSettings.mipmapLevels > 0;
+        Minecraft.getMinecraft().getTextureManager().bindTexture(TextureMap.LOCATION_BLOCKS_TEXTURE);
+        ((AbstractTexture) Minecraft.getMinecraft().getTextureManager().getTexture(TextureMap.LOCATION_BLOCKS_TEXTURE)).setBlurMipmapDirect(false, mipped);
+    }
+
     private static TerrainRenderPass.TerrainRenderPassBuilder builderForRenderType(BlockRenderLayer chunkRenderType, ChunkVertexType vertexType) {
-        return TerrainRenderPass.builder().pipelineState(MIPMAP_CONTROLLED_STATE).vertexType(vertexType).primitiveType(QuadPrimitiveType.TRIANGULATED);
+        TerrainRenderPass.PipelineState state = chunkRenderType == BlockRenderLayer.TRANSLUCENT
+                ? TRANSLUCENT_STATE
+                : MIPMAP_CONTROLLED_STATE;
+
+        return TerrainRenderPass.builder().pipelineState(state).vertexType(vertexType).primitiveType(QuadPrimitiveType.TRIANGULATED);
     }
 
     public static RenderPassConfiguration<BlockRenderLayer> build(ChunkVertexType vertexType) {

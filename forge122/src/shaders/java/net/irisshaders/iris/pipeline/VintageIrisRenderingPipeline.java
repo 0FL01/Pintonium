@@ -69,6 +69,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private boolean vintageEntityCompatBridgeLogged;
     private boolean vintageEntityShaderBridgeLogged;
     private boolean vintageEntityPreferShaderProgram;
+    private boolean vintageEntityClampLowerBodySkyLight;
 
     @Nullable
     private Program vintageBlockEntityCompatProgram;
@@ -130,6 +131,8 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
 
     public VintageIrisRenderingPipeline(ProgramSet programSet) {
         super(programSet);
+        MINECRAFT_SHIM.populateBlockIds(this.pack);
+        this.blockIdsNeedPopulation = false;
         this.createVintageEntityProgram();
         this.createVintageEntityCompatibilityProgram();
         this.createVintageBlockEntityCompatibilityProgram();
@@ -202,12 +205,14 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             this.addGbufferOrShadowSamplers(builder, builder, () -> this.isBeforeTranslucent ? this.flippedAfterPrepare : this.flippedAfterTranslucent,
                     false, true, true, false);
 
+            int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
             this.vintageEntityProgram = builder.build();
             this.customUniforms.mapholderToPass(builder, this.vintageEntityProgram);
             this.vintageEntityFramebuffer = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare,
-                    this.celeritas$drawBuffersOrDefault(source));
+                    drawBuffers);
             this.vintageEntityBlendOverride = source.getDirectives().getBlendModeOverride().orElse(ProgramId.Entities.getBlendModeOverride());
             this.vintageEntityBufferBlendOverrides = this.celeritas$createBufferBlendOverrides(source);
+            this.vintageEntityClampLowerBodySkyLight = this.celeritas$isColorAndAuxBufferLayout(drawBuffers);
         } catch (RuntimeException e) {
             if (this.vintageEntityProgram != null) {
                 this.vintageEntityProgram.delete();
@@ -217,6 +222,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             this.vintageEntityFramebuffer = null;
             this.vintageEntityBlendOverride = null;
             this.vintageEntityBufferBlendOverrides = Collections.emptyList();
+            this.vintageEntityClampLowerBodySkyLight = false;
             IRIS_LOGGER.warn("Failed to create the 1.12 entity shader bridge. Entities will use vanilla rendering for this shader pack.", e);
         }
     }
@@ -740,6 +746,10 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
 
     public boolean isVintageEntityCompatibilityRenderingActive() {
         return this.vintageEntityCompatRenderingActive;
+    }
+
+    public boolean shouldClampVintageEntityLowerBodySkyLight() {
+        return this.vintageEntityRenderingActive && this.vintageEntityClampLowerBodySkyLight;
     }
 
     public boolean beginVintageEntityFallbackRendering() {

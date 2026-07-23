@@ -89,10 +89,12 @@ fun isVersionIncluded(ver: String): Boolean {
 
     val testVer = ver.substringBefore('-')
 
-    return includedVersionsProp.any { stonecutter.eval(testVer, it) }
+    return includedVersionsProp.any { it == testVer || stonecutter.eval(testVer, it) }
 }
 
-if(file("forge1710").exists() && isVersionIncluded("1.7.10")) {
+if(file("forge1710").exists()
+    && (includedSubprojectsProp == null || includedSubprojectsProp.contains("forge1710"))
+    && isVersionIncluded("1.7.10")) {
     include("forge1710")
 }
 

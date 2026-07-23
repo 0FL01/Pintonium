@@ -1,0 +1,7 @@
+Skipping project babric by request
+Skipping project modern by request
+Pintonium: 2.4.0
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: C:\Users\somet\OneDrive\Documents\celeritest\forge122\src\main\java\org\taumc\celeritas\api\options\structure\OptionImpl.java uses unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.

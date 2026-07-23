@@ -4,6 +4,7 @@ import net.irisshaders.iris.gl.shader.ShaderCompileException;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.taumc.celeritas.CeleritasShaderVersionService;
 
 import java.lang.invoke.MethodHandle;
@@ -25,6 +26,9 @@ public class DHCompat {
 	private static MethodHandle getDepthTexNoTranslucent;
 	private static MethodHandle checkFrame;
 	private static MethodHandle getRenderDistance;
+	private static MethodHandle renderDeferredLods;
+	private static final Matrix4f currentProjection = new Matrix4f();
+	private static boolean hasCurrentProjection;
 	private Object compatInternalInstance;
 
 	public DHCompat(IrisRenderingPipeline pipeline, boolean renderDHShadow) {
@@ -53,8 +57,22 @@ public class DHCompat {
 			return new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferProjection());
 		}
 
+		if (hasCurrentProjection) {
+			return new Matrix4f(currentProjection);
+		}
+
 		Matrix4f projection = new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferProjection());
 		return new Matrix4f().setPerspective(projection.perspectiveFov(), projection.m11() / projection.m00(), DHCompat.getNearPlane(), DHCompat.getFarPlane());
+	}
+
+	public static void setProjection(Matrix4fc projection) {
+		currentProjection.set(projection);
+		hasCurrentProjection = true;
+	}
+
+	public static void resetProjection() {
+		currentProjection.identity();
+		hasCurrentProjection = false;
 	}
 
 	public static void run() {
@@ -69,6 +87,7 @@ public class DHCompat {
 				getNearPlane = MethodHandles.lookup().findStatic(Class.forName("net.irisshaders.iris.compat.dh.DHCompatInternal"), "getNearPlane", MethodType.methodType(float.class));
 				getDepthTexNoTranslucent = MethodHandles.lookup().findVirtual(Class.forName("net.irisshaders.iris.compat.dh.DHCompatInternal"), "getDepthTexNoTranslucent", MethodType.methodType(int.class));
 				checkFrame = MethodHandles.lookup().findStatic(Class.forName("net.irisshaders.iris.compat.dh.DHCompatInternal"), "checkFrame", MethodType.methodType(boolean.class));
+				renderDeferredLods = MethodHandles.lookup().findStatic(Class.forName("net.irisshaders.iris.compat.dh.DHCompatInternal"), "renderDeferredLods", MethodType.methodType(void.class));
 
 				setupEventHandlers.invoke();
 				dhPresent = true;
@@ -144,7 +163,20 @@ public class DHCompat {
 		return checkFrame();
 	}
 
+	public static void renderDeferredLods() {
+		if (!dhPresent || renderDeferredLods == null) {
+			return;
+		}
+
+		try {
+			renderDeferredLods.invoke();
+		} catch (Throwable e) {
+			throw new RuntimeException("Failed to render deferred Distant Horizons LODs.", e);
+		}
+	}
+
 	public void clearPipeline() {
+		resetProjection();
 		if (compatInternalInstance == null) return;
 
 		try {

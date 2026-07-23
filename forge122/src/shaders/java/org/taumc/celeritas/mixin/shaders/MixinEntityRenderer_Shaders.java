@@ -1,5 +1,6 @@
 package org.taumc.celeritas.mixin.shaders;
 
+import net.irisshaders.iris.compat.dh.DHCompat;
 import net.irisshaders.iris.IrisCommon;
 import net.irisshaders.iris.IrisVintage;
 import net.irisshaders.iris.pipeline.CommonIrisRenderingPipeline;
@@ -71,6 +72,7 @@ public class MixinEntityRenderer_Shaders {
     @Inject(method = "renderWorldPass(IFJ)V", at = @At("HEAD"))
     private void iris$setupPipeline(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         this.iris$pipeline = null;
+        DHCompat.checkFrame();
 
         if (pass != 2 || this.mc.world == null || this.mc.getRenderViewEntity() == null) {
             return;

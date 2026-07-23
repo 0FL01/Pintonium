@@ -23,6 +23,7 @@ import net.irisshaders.iris.gl.shader.ShaderCompileException;
 import net.irisshaders.iris.gl.state.FogMode;
 import net.irisshaders.iris.gl.texture.DepthBufferFormat;
 import net.irisshaders.iris.gl.texture.TextureType;
+import net.irisshaders.iris.gl.uniform.DynamicUniformHolder;
 import net.irisshaders.iris.gui.option.IrisVideoSettings;
 import net.irisshaders.iris.helpers.OptionalBoolean;
 import net.irisshaders.iris.helpers.Tri;
@@ -309,6 +310,10 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
         return updateNotifier;
     }
 
+    public void addCommonUniforms(DynamicUniformHolder uniforms, FogMode fogMode) {
+        CommonUniforms.addCommonUniforms(uniforms, pack.getIdMap(), packDirectives, updateNotifier, fogMode);
+    }
+
     @Override
     public float getSunPathRotation() {
         return sunPathRotation;
@@ -348,6 +353,14 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
         } else {
             defaultFBAlt.bind();
         }
+    }
+
+    public int getDepthTexture() {
+        return renderTargets.getDepthTexture();
+    }
+
+    public int getDepthTextureNoTranslucents() {
+        return renderTargets.getDepthTextureNoTranslucents().getTextureId();
     }
 
     public void bindDefaultShadow() {
@@ -1203,8 +1216,8 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
 
         MINECRAFT_SHIM.unbindMainFramebuffer();
 
-        renderTargets.destroy();
         dhCompat.clearPipeline();
+        renderTargets.destroy();
 
         customImages.forEach(GlImage::delete);
 

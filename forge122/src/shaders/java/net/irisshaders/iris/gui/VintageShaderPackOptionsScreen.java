@@ -247,10 +247,6 @@ public class VintageShaderPackOptionsScreen extends GuiScreen {
 
     private void applyChanges(String successMessage) {
         CeleritasShaderVersionService.INSTANCE.reload();
-        Minecraft minecraft = Minecraft.getMinecraft();
-        if (minecraft.world != null) {
-            minecraft.renderGlobal.loadRenderers();
-        }
 
         this.refreshPackContext();
         this.statusMessage = successMessage;

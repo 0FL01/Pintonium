@@ -9,6 +9,7 @@ import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.texture.TextureUtil;
+import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.entity.Entity;
@@ -48,10 +49,13 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Locale;
 
+import static net.irisshaders.iris.IrisLogging.IRIS_LOGGER;
+
 public class MinecraftVintageVersionShimImpl implements MinecraftVersionShimService, PlatformUtilService {
     private static final Minecraft CLIENT = Minecraft.getMinecraft();
     private static final boolean DEVELOPMENT_ENVIRONMENT = Boolean.TRUE.equals(Launch.blackboard.get("fml.deobfuscatedEnvironment"));
     private static final float DISABLED_SHADOW_SPACE_SCALE = 1.0E-6F;
+    private static boolean rendererReloadDeferred;
 
     @Override
     public boolean isOnOSX() {
@@ -477,14 +481,59 @@ public class MinecraftVintageVersionShimImpl implements MinecraftVersionShimServ
 
     @Override
     public void markRendererReloadRequired() {
-        if (CLIENT.renderGlobal != null) {
-            CLIENT.renderGlobal.loadRenderers();
+        if (CLIENT.renderGlobal == null) {
+            return;
+        }
+
+        if (!rendererReloadDeferred && shouldDeferRendererReload()) {
+            IRIS_LOGGER.info("Deferring 1.12 renderer reload until the client has finished entering the world");
+        }
+
+        rendererReloadDeferred = true;
+    }
+
+    public static void processDeferredRendererReload() {
+        if (!rendererReloadDeferred || CLIENT.renderGlobal == null || shouldDeferRendererReload()) {
+            return;
+        }
+
+        rendererReloadDeferred = false;
+        reloadRendererNow("deferred shader pipeline change");
+    }
+
+    private static boolean shouldDeferRendererReload() {
+        if (CLIENT.world == null) {
+            return true;
+        }
+
+        if (CLIENT.player == null || CLIENT.getConnection() == null) {
+            return true;
+        }
+
+        GuiScreen currentScreen = CLIENT.currentScreen;
+        if (currentScreen == null) {
+            return false;
+        }
+
+        String screenName = currentScreen.getClass().getSimpleName();
+        return "GuiScreenWorking".equals(screenName) || "GuiDownloadTerrain".equals(screenName);
+    }
+
+    private static void reloadRendererNow(String reason) {
+        long start = System.nanoTime();
+        CLIENT.renderGlobal.loadRenderers();
+
+        long elapsedMillis = (System.nanoTime() - start) / 1_000_000L;
+        if (elapsedMillis > 500L) {
+            IRIS_LOGGER.info("Completed 1.12 renderer reload for {} in {} ms", reason, elapsedMillis);
         }
     }
 
     @Override
     public boolean isDHPresent() {
-        return false;
+        // Shader initialization runs before Forge has populated Loader.namedMods.
+        return MinecraftVintageVersionShimImpl.class.getResource(
+                "/com/seibel/distanthorizons/api/DhApi.class") != null;
     }
 
     @Override

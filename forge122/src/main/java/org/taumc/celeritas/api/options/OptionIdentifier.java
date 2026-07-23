@@ -66,6 +66,11 @@ public final class OptionIdentifier<T> {
         return this.modId.equals(other.getNamespace()) && this.path.equals(other.getPath());
     }
 
+    @SuppressWarnings("unchecked")
+    public <U> OptionIdentifier<U> cast() {
+        return (OptionIdentifier<U>) this;
+    }
+
     @Override
     public String toString() {
         return this.modId + ":" + this.path;

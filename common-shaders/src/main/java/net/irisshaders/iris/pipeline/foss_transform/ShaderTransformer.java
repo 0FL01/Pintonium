@@ -3,6 +3,7 @@ package net.irisshaders.iris.pipeline.foss_transform;
 import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
 import net.irisshaders.iris.gl.blending.AlphaTest;
 import net.irisshaders.iris.pipeline.transform.Patch;
+import net.irisshaders.iris.pipeline.transform.parameter.DHParameters;
 import net.irisshaders.iris.pipeline.transform.parameter.Parameters;
 import net.irisshaders.iris.pipeline.transform.parameter.SodiumParameters;
 import net.irisshaders.iris.pipeline.transform.parameter.VanillaParameters;
@@ -197,6 +198,12 @@ public class ShaderTransformer {
                         case VANILLA:
                             VanillaTransformer.patchVanillaCore(transformer, (VanillaParameters)parameters);
                             break;
+                        case DH_TERRAIN:
+                            DHTerrainTransformer.patchDHTerrain(transformer, (DHParameters) parameters, true);
+                            break;
+                        case DH_GENERIC:
+                            DHGenericTransformer.patchDHGeneric(transformer, (DHParameters) parameters, true);
+                            break;
                         default:
                             throw new IllegalStateException("Unknown patch type: " + patchType.name());
                     }
@@ -215,6 +222,12 @@ public class ShaderTransformer {
                             break;
                         case VANILLA:
                             VanillaTransformer.patchVanilla(transformer, (VanillaParameters)parameters);
+                            break;
+                        case DH_TERRAIN:
+                            DHTerrainTransformer.patchDHTerrain(transformer, (DHParameters) parameters, false);
+                            break;
+                        case DH_GENERIC:
+                            DHGenericTransformer.patchDHGeneric(transformer, (DHParameters) parameters, false);
                             break;
                         default:
                             throw new IllegalStateException("Unknown patch type: " + patchType.name());
@@ -366,9 +379,22 @@ public class ShaderTransformer {
                 root.injectFunction("layout (location = " + i + ") out vec4 iris_FragData" + i + ";");
             }
 
-            if ((parameters.getAlphaTest() != AlphaTest.ALWAYS && !core) && found.contains(0)) {
+            if (parameters.getAlphaTest() != AlphaTest.ALWAYS && found.contains(0)) {
                 root.injectVariable("uniform float iris_currentAlphaTest;");
-                root.appendMain(parameters.getAlphaTest().toExpression("iris_FragData0.a", "iris_currentAlphaTest", ""));
+                String passAlphaThreshold = Float.toString(parameters.getAlphaTest().reference());
+                String alphaExpression = "iris_FragData0.a";
+
+                // Legacy texture atlases need cutout coverage to come from the source texel. Some packs
+                // (notably Lumina) deliberately widen alpha while anisotropically filtering RGB, which can
+                // otherwise turn every transparent leaf texel into a low-alpha opaque fragment.
+                if (parameters instanceof SodiumParameters
+                        && root.containsCall("textureAF")
+                        && root.hasVariable("tex")
+                        && root.hasVariable("texCoord")) {
+                    alphaExpression = "texture2D(tex, texCoord).a";
+                }
+
+                root.appendMain(parameters.getAlphaTest().toExpression(alphaExpression, passAlphaThreshold, ""));
             }
 
         }

@@ -1,8 +1,12 @@
 package net.irisshaders.iris;
 
 import net.irisshaders.iris.features.FeatureFlags;
+import net.irisshaders.iris.compat.dh.DHCompat;
+import net.irisshaders.iris.compat.dh.DHCompatInternal;
 import net.irisshaders.iris.gl.IrisRenderSystem;
+import net.irisshaders.iris.pipeline.CommonIrisRenderingPipeline;
 import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
+import net.irisshaders.iris.pipeline.PipelineManager;
 import net.irisshaders.iris.pipeline.VintageIrisRenderingPipeline;
 import net.irisshaders.iris.pipeline.VintageVanillaRenderingPipeline;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
@@ -207,24 +211,36 @@ public class IrisVintage implements CeleritasShaderVersionService {
     @Override
     public void onEarlyInitialize() {
         installVanillaStateResetter();
+        DHCompat.run();
     }
 
     @Override
     public void onRenderSystemInit() {
         installVanillaStateResetter();
         ensureRenderSystemInitialized();
-        IrisCommon.loadShaderpack();
+        if (!MinecraftVersionShimService.MINECRAFT_SHIM.isDHPresent()) {
+            IrisCommon.loadShaderpack();
+        }
     }
 
     @Override
     public void onLoadingComplete() {
         installVanillaStateResetter();
 
+        // DH can defer loading the selected shader pack until after its API is ready.
+        // Resolve that deferred load before deciding whether the menu needs a pipeline;
+        // otherwise the manager call below can activate shaders after the condition was
+        // evaluated and accidentally construct a world pipeline inside the main menu.
+        PipelineManager pipelineManager = IrisCommon.getPipelineManager();
+
         if (MinecraftVersionShimService.MINECRAFT_SHIM.isLevelLoaded()) {
-            IrisCommon.getPipelineManager().preparePipeline(getCurrentDimension());
+            pipelineManager.preparePipeline(getCurrentDimension());
             resetVanillaGlState();
-        } else if (!isShaderPackActive()) {
-            IrisCommon.getPipelineManager().preparePipeline(DimensionId.OVERWORLD);
+        } else {
+            if (!isShaderPackActive()) {
+                pipelineManager.preparePipeline(DimensionId.OVERWORLD);
+            }
+            resetMenuGlState();
         }
     }
 
@@ -298,6 +314,7 @@ public class IrisVintage implements CeleritasShaderVersionService {
 
         MinecraftVersionShimService.MINECRAFT_SHIM.bindMainFramebuffer();
         GL_STATE_MANAGER.glUseProgram(0);
+        resetVanillaRenderDeviceState();
 
         GL11.glViewport(0, 0, minecraft.getFramebuffer().framebufferWidth, minecraft.getFramebuffer().framebufferHeight);
 
@@ -380,6 +397,6 @@ public class IrisVintage implements CeleritasShaderVersionService {
     @Override
     public Object getDHCompatInstance(IrisRenderingPipeline pipeline, boolean renderDHShadow)
             throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
-        return null;
+        return new DHCompatInternal((CommonIrisRenderingPipeline) pipeline, renderDHShadow);
     }
 }

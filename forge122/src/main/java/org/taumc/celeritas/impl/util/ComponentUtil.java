@@ -1,20 +1,18 @@
 package org.taumc.celeritas.impl.util;
 
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.TextComponentString;
-import net.minecraft.util.text.TextComponentTranslation;
+import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 
 public class ComponentUtil {
 
-    public static ITextComponent empty() {
-        return new TextComponentString("");
+    public static TextComponent empty() {
+        return TextComponent.literal("");
     }
 
-    public static ITextComponent literal(String text) {
-        return new TextComponentString(text);
+    public static TextComponent literal(String text) {
+        return TextComponent.literal(text);
     }
 
-    public static ITextComponent translatable(String key, Object... args) {
-        return new TextComponentTranslation(key, args);
+    public static TextComponent translatable(String key, Object... args) {
+        return TextComponent.translatable(key, args);
     }
 }

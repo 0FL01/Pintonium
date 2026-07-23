@@ -2,6 +2,7 @@ package org.taumc.celeritas.mixin.core;
 
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import net.minecraft.client.Minecraft;
+import org.embeddedt.embeddium.impl.MinecraftVintageVersionShimImpl;
 import org.lwjgl.opengl.GL32C;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -43,6 +44,8 @@ public class MinecraftMixin {
 
     @Inject(method = "runTick", at = @At("RETURN"))
     private void postRender(CallbackInfo ci) {
+        MinecraftVintageVersionShimImpl.processDeferredRendererReload();
+
         var fence = GL32C.glFenceSync(GL32C.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 
         if (fence == 0) {

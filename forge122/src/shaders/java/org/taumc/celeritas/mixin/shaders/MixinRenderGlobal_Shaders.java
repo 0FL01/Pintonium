@@ -1,6 +1,8 @@
 package org.taumc.celeritas.mixin.shaders;
 
 import net.irisshaders.iris.IrisCommon;
+import net.irisshaders.iris.compat.dh.DHCompat;
+import net.irisshaders.iris.pipeline.CommonIrisRenderingPipeline;
 import net.irisshaders.iris.pipeline.VintageIrisRenderingPipeline;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
 import net.minecraft.client.renderer.RenderGlobal;
@@ -30,6 +32,11 @@ public class MixinRenderGlobal_Shaders {
         WorldRenderingPipeline pipeline = IrisCommon.getPipelineManager().getPipelineNullable();
         if (pipeline != null) {
             pipeline.beginTranslucents();
+            if (pipeline instanceof CommonIrisRenderingPipeline) {
+                CommonIrisRenderingPipeline commonPipeline = (CommonIrisRenderingPipeline) pipeline;
+                DHCompat.renderDeferredLods();
+                commonPipeline.bindDefault();
+            }
         }
     }
 

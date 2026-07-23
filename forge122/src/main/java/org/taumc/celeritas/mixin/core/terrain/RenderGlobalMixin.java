@@ -491,18 +491,36 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
     }
 
     @Unique
-    private void celeritas$prepareEntityLightmapCoordinates(Entity entity, boolean attenuateSkyLight, float partialTicks) {
+    private void celeritas$prepareEntityLightmapCoordinates(Entity entity, boolean attenuateSkyLight, boolean clampLowerBodySkyLight, float partialTicks) {
         int packedLight = entity.getBrightnessForRender();
         float blockLight = packedLight & 0xFFFF;
         float skyLight = packedLight >> 16;
         if (this.celeritas$isNoSkylightDimension()) {
             skyLight = Math.max(skyLight, celeritas$NO_SKYLIGHT_ENTITY_LIGHT_FLOOR);
+        } else if (clampLowerBodySkyLight) {
+            int lowerBodyPackedLight = this.celeritas$getEntityLowerBodyPackedLight(entity, packedLight);
+            blockLight = Math.max(blockLight, lowerBodyPackedLight & 0xFFFF);
+            skyLight = Math.min(skyLight, lowerBodyPackedLight >> 16);
         }
         if (attenuateSkyLight) {
             skyLight *= this.celeritas$getDaylightFactor(partialTicks);
         }
         OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, blockLight, skyLight);
         GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+    }
+
+    @Unique
+    private int celeritas$getEntityLowerBodyPackedLight(Entity entity, int fallbackPackedLight) {
+        if (this.world == null) {
+            return fallbackPackedLight;
+        }
+
+        BlockPos lowerBodyPos = new BlockPos(entity.posX, entity.getEntityBoundingBox().minY + 0.1D, entity.posZ);
+        if (lowerBodyPos.getY() < 0 || lowerBodyPos.getY() >= 256 || !this.world.isBlockLoaded(lowerBodyPos)) {
+            return fallbackPackedLight;
+        }
+
+        return this.world.getCombinedLight(lowerBodyPos, 0);
     }
 
     @Unique
@@ -534,6 +552,7 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         boolean irisEntityRendering = irisEntityPipeline != null && irisEntityPipeline.beginVintageEntityRendering();
         boolean irisEntityFallbackRendering = !irisEntityRendering && irisEntityPipeline != null && irisEntityPipeline.beginVintageEntityFallbackRendering();
         boolean attenuateEntitySkyLight = irisEntityRendering && !irisEntityPipeline.isVintageEntityCompatibilityRenderingActive();
+        boolean clampEntityLowerBodySkyLight = irisEntityRendering && irisEntityPipeline.shouldClampVintageEntityLowerBodySkyLight();
         this.celeritas$prepareVanillaEntityRenderState(!irisEntityRendering, attenuateEntitySkyLight, partialTicks);
 
         try {
@@ -567,7 +586,7 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
                     if (irisEntityRendering) {
                         this.celeritas$setIrisEntityAttribute(shaderEntityId);
                     }
-                    this.celeritas$prepareEntityLightmapCoordinates(entity, attenuateEntitySkyLight, partialTicks);
+                    this.celeritas$prepareEntityLightmapCoordinates(entity, attenuateEntitySkyLight, clampEntityLowerBodySkyLight, partialTicks);
                     this.renderManager.renderEntityStatic(entity, partialTicks, false);
 
                     if (this.isOutlineActive(entity, renderViewEntity, camera))
@@ -598,6 +617,7 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         boolean irisEntityRendering = irisEntityPipeline != null && irisEntityPipeline.beginVintageEntityRendering();
         boolean irisEntityFallbackRendering = !irisEntityRendering && irisEntityPipeline != null && irisEntityPipeline.beginVintageEntityFallbackRendering();
         boolean attenuateEntitySkyLight = irisEntityRendering && !irisEntityPipeline.isVintageEntityCompatibilityRenderingActive();
+        boolean clampEntityLowerBodySkyLight = irisEntityRendering && irisEntityPipeline.shouldClampVintageEntityLowerBodySkyLight();
 
         try {
             if (irisEntityRendering) {
@@ -611,7 +631,7 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
                 this.celeritas$prepareVanillaEntityRenderState(!irisEntityRendering, attenuateEntitySkyLight, partialTicks);
             }
 
-            this.celeritas$prepareEntityLightmapCoordinates(entity, attenuateEntitySkyLight, partialTicks);
+            this.celeritas$prepareEntityLightmapCoordinates(entity, attenuateEntitySkyLight, clampEntityLowerBodySkyLight, partialTicks);
             renderManager.renderMultipass(entity, partialTicks);
         } finally {
             if (irisEntityRendering) {

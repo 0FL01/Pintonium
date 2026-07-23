@@ -30,6 +30,14 @@ public final class ChunkVertexExtendedData {
         data.lightValue = lightValue;
     }
 
+    public static void setGeometry(int midTexCoord, int normal, int tangent) {
+        Data data = CURRENT.get();
+        data.reset();
+        data.midTexCoord = midTexCoord;
+        data.normal = normal;
+        data.tangent = tangent;
+    }
+
     public static void clear() {
         CURRENT.get().reset();
     }

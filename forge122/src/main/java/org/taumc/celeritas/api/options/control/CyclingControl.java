@@ -10,6 +10,7 @@ import org.taumc.celeritas.impl.gui.options.TextProvider;
 import org.taumc.celeritas.impl.util.ComponentUtil;
 import org.taumc.celeritas.impl.util.Dim2i;
 import org.apache.commons.lang3.Validate;
+import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 
 public class CyclingControl<T extends Enum<T>> implements Control<T> {
     private final Option<T> option;
@@ -29,6 +30,10 @@ public class CyclingControl<T extends Enum<T>> implements Control<T> {
         this.option = option;
         this.allowedValues = universe;
         this.names = names;
+    }
+
+    public CyclingControl(Option<T> option, Class<T> enumType, TextComponent[] names) {
+        this(option, enumType, (ITextComponent[]) names);
     }
 
     public CyclingControl(Option<T> option, Class<T> enumType, T[] allowedValues) {

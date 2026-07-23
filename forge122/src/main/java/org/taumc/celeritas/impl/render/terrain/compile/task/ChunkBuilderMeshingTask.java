@@ -32,6 +32,7 @@ import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.util.task.CancellationToken;
 import org.joml.Vector3d;
 import org.taumc.celeritas.impl.compat.fluidlogged.FluidloggedCompat;
+import org.taumc.celeritas.impl.compat.leafculling.CeleritasLeafCullingCompat;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.world.WorldSlice;
 import org.taumc.celeritas.impl.world.cloned.CeleritasBlockAccess;
@@ -109,13 +110,27 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                             }
                         }
 
-                        for (BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
-                            if (block.canRenderInLayer(blockState, layer)) {
-                                ForgeHooksClient.setRenderLayer(layer);
-                                var buffer = buildContext.getBufferForLayer(layer);
-                                int startVertex = buffer.getVertexCount();
-                                dispatcher.renderBlock(blockState, blockPos, slice, buffer);
-                                buildContext.recordRenderedQuads(layer, startVertex, buffer.getVertexCount(), blockState, blockPos);
+                        boolean leafLike = CeleritasLeafCullingCompat.isLeafLike(blockState);
+                        boolean renderLeavesAsSolid = CeleritasLeafCullingCompat.shouldRenderSurroundedLeavesAsSolid(blockState, slice, blockPos);
+
+                        if (leafLike) {
+                            BlockRenderLayer leafLayer = CeleritasLeafCullingCompat.shouldUseSolidRenderLayer(blockState, renderLeavesAsSolid)
+                                    ? BlockRenderLayer.SOLID
+                                    : CeleritasLeafCullingCompat.getLeafRenderLayer(blockState, false);
+                            ForgeHooksClient.setRenderLayer(leafLayer);
+                            var buffer = buildContext.getBufferForLayer(leafLayer);
+                            int startVertex = buffer.getVertexCount();
+                            dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                            buildContext.recordRenderedQuads(leafLayer, startVertex, buffer.getVertexCount(), blockState, blockPos);
+                        } else {
+                            for (BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
+                                if (block.canRenderInLayer(blockState, layer)) {
+                                    ForgeHooksClient.setRenderLayer(layer);
+                                    var buffer = buildContext.getBufferForLayer(layer);
+                                    int startVertex = buffer.getVertexCount();
+                                    dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                    buildContext.recordRenderedQuads(layer, startVertex, buffer.getVertexCount(), blockState, blockPos);
+                                }
                             }
                         }
 

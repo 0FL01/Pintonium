@@ -1,6 +1,6 @@
 package org.taumc.celeritas.api.options.control;
 
-import net.minecraft.util.text.ITextComponent;
+import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.taumc.celeritas.impl.util.ComponentUtil;
 
 public interface ControlValueFormatter {
@@ -28,7 +28,7 @@ public interface ControlValueFormatter {
         return (v) -> v == 0 ? ComponentUtil.translatable("gui.none") : ComponentUtil.translatable("sodium.options.biome_blend.value", v);
     }
 
-    ITextComponent format(int var1);
+    TextComponent format(int var1);
 
     static ControlValueFormatter translateVariable(String key) {
         return (v) -> ComponentUtil.translatable(key, v);

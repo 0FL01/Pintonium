@@ -49,7 +49,7 @@ public class VintageBlockMaterialMapping {
 
     private static void addBlockStates(Block block, ResourceLocation location, IBlockEntry entry,
                                        Object2IntMap<IBlockState> idMap, int intId) {
-        Map<IProperty<?>, String> properties = resolveProperties(block, location, entry.propertyPredicates(), intId);
+        Map<IProperty<?>, String> properties = resolveProperties(block, location, entry, intId);
 
         if (!entry.metadataIds().isEmpty()) {
             for (int metadata : entry.metadataIds()) {
@@ -94,6 +94,10 @@ public class VintageBlockMaterialMapping {
                 case "lily_pad" -> addLocation(locations, namespace, "waterlily");
                 case "cobweb" -> addLocation(locations, namespace, "web");
                 case "redstone_lamp" -> addLocation(locations, namespace, "lit_redstone_lamp");
+                case "oak_leaves", "spruce_leaves", "birch_leaves", "jungle_leaves" ->
+                        addLocation(locations, namespace, "leaves");
+                case "acacia_leaves", "dark_oak_leaves" ->
+                        addLocation(locations, namespace, "leaves2");
             }
         }
 
@@ -120,10 +124,10 @@ public class VintageBlockMaterialMapping {
     }
 
     private static Map<IProperty<?>, String> resolveProperties(Block block, ResourceLocation location,
-                                                               Map<String, String> predicates, int intId) {
+                                                               IBlockEntry entry, int intId) {
         Map<IProperty<?>, String> properties = new HashMap<>();
 
-        predicates.forEach((key, value) -> {
+        entry.propertyPredicates().forEach((key, value) -> {
             IProperty<?> property = findProperty(block, key);
             if (property == null) {
                 IRIS_LOGGER.warn("Warning while parsing block.{}: block {} has no property named {}", intId, location, key);
@@ -132,7 +136,33 @@ public class VintageBlockMaterialMapping {
             }
         });
 
+        String leafVariant = resolveLegacyLeafVariant(location, entry.id());
+        if (leafVariant != null) {
+            IProperty<?> variantProperty = findProperty(block, "variant");
+            if (variantProperty != null) {
+                properties.putIfAbsent(variantProperty, leafVariant);
+            }
+        }
+
         return properties;
+    }
+
+    private static String resolveLegacyLeafVariant(ResourceLocation location, NamespacedId entryId) {
+        if (!"minecraft".equals(location.getNamespace()) || !"minecraft".equals(entryId.getNamespace())) {
+            return null;
+        }
+
+        String legacyName = location.getPath();
+        String modernName = entryId.getName();
+        return switch (modernName) {
+            case "oak_leaves" -> "leaves".equals(legacyName) ? "oak" : null;
+            case "spruce_leaves" -> "leaves".equals(legacyName) ? "spruce" : null;
+            case "birch_leaves" -> "leaves".equals(legacyName) ? "birch" : null;
+            case "jungle_leaves" -> "leaves".equals(legacyName) ? "jungle" : null;
+            case "acacia_leaves" -> "leaves2".equals(legacyName) ? "acacia" : null;
+            case "dark_oak_leaves" -> "leaves2".equals(legacyName) ? "dark_oak" : null;
+            default -> null;
+        };
     }
 
     private static IProperty<?> findProperty(Block block, String key) {

@@ -38,6 +38,7 @@ import org.embeddedt.embeddium.impl.util.QuadUtil;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.system.MemoryUtil;
 import org.taumc.celeritas.CeleritasVintage;
+import org.taumc.celeritas.impl.compat.leafculling.CeleritasLeafCullingCompat;
 import org.taumc.celeritas.impl.extensions.SpriteExtension;
 import org.taumc.celeritas.impl.extensions.TextureMapExtension;
 import org.taumc.celeritas.impl.world.WorldSlice;
@@ -111,7 +112,8 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
                 pos.getX() - this.offX,
                 pos.getY() - this.offY,
                 pos.getZ() - this.offZ,
-                (byte) state.getLightValue()));
+                (byte) state.getLightValue(),
+                layer != BlockRenderLayer.SOLID && CeleritasLeafCullingCompat.isLeafLike(state)));
     }
 
     public void convertVanillaDataToCeleritasData(ChunkBuildBuffers buffers) {
@@ -144,7 +146,11 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
         }
     }
 
-    private Material selectMaterial(Material material, TextureAtlasSprite sprite) {
+    private Material selectMaterial(Material material, TextureAtlasSprite sprite, QuadMetadata metadata) {
+        if (metadata != null && metadata.preserveRenderLayer()) {
+            return material;
+        }
+
         if (sprite != null && sprite.getClass() == TextureAtlasSprite.class && !sprite.hasAnimationMetadata() && this.useRenderPassOptimization) {
             var transparencyLevel = ((SpriteExtension)sprite).celeritas$getTransparencyLevel();
             if (transparencyLevel == SpriteTransparencyLevel.OPAQUE) {
@@ -202,8 +208,10 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
                 vertex.trueNormal = trueNormal;
             }
             ModelQuadFacing facing = QuadUtil.findNormalFace(trueNormal);
-            Material correctMaterial = selectMaterial(material, sprite);
             QuadMetadata metadata = findMetadata(quadMetadata, q, metadataIndex);
+            Material correctMaterial = selectMaterial(material, sprite, metadata);
+            int midTexCoord = ChunkVertexExtendedData.encodeMidTexCoord(uSum * 0.25f, vSum * 0.25f);
+            int tangent = ChunkVertexExtendedData.computeTangent(quad, trueNormal);
             if (metadata != null) {
                 while (metadataIndex + 1 < quadMetadata.size() && q >= quadMetadata.get(metadataIndex).endQuad) {
                     metadataIndex++;
@@ -211,15 +219,15 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
                 ChunkVertexExtendedData.set(
                         metadata.blockId,
                         metadata.renderType,
-                        ChunkVertexExtendedData.encodeMidTexCoord(uSum * 0.25f, vSum * 0.25f),
+                        midTexCoord,
                         trueNormal,
-                        ChunkVertexExtendedData.computeTangent(quad, trueNormal),
+                        tangent,
                         metadata.localX,
                         metadata.localY,
                         metadata.localZ,
                         metadata.lightValue);
             } else {
-                ChunkVertexExtendedData.clear();
+                ChunkVertexExtendedData.setGeometry(midTexCoord, trueNormal, tangent);
             }
             buffers.get(correctMaterial).getVertexBuffer(facing).push(quad, correctMaterial);
         }
@@ -362,6 +370,6 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
     }
 
     private record QuadMetadata(int startQuad, int endQuad, int blockId, short renderType,
-                                int localX, int localY, int localZ, byte lightValue) {
+                                int localX, int localY, int localZ, byte lightValue, boolean preserveRenderLayer) {
     }
 }

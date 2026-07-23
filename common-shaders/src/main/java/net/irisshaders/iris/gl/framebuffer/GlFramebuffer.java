@@ -26,6 +26,19 @@ public class GlFramebuffer extends GlObject {
 	}
 
 	public void addDepthAttachment(int texture) {
+		addDepthAttachmentInternal(texture);
+		this.hasDepthAttachment = true;
+	}
+
+	/**
+	 * Attaches a depth texture owned by another renderer without registering this
+	 * framebuffer as the owner of that attachment.
+	 */
+	public void addDepthAttachmentBypass(int texture) {
+		addDepthAttachmentInternal(texture);
+	}
+
+	private void addDepthAttachmentInternal(int texture) {
 		int internalFormat = TextureInfoCache.INSTANCE.getInfo(texture).getInternalFormat();
 		DepthBufferFormat depthBufferFormat = DepthBufferFormat.fromGlEnumOrDefault(internalFormat);
 
@@ -36,8 +49,6 @@ public class GlFramebuffer extends GlObject {
 		} else {
 			IrisRenderSystem.framebufferTexture2D(fb, GL30C.GL_FRAMEBUFFER, GL30C.GL_DEPTH_ATTACHMENT, GL30C.GL_TEXTURE_2D, texture, 0);
 		}
-
-		this.hasDepthAttachment = true;
 	}
 
 	public void addColorAttachment(int index, int texture) {

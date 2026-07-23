@@ -1,22 +1,20 @@
 package org.taumc.celeritas.api.options.structure;
 
-import net.minecraft.util.ResourceLocation;
 import org.taumc.celeritas.api.options.OptionIdentifier;
-import org.taumc.celeritas.impl.util.ResourceLocationUtil;
 
 public final class StandardOptions {
     public static class Group {
-        public static final ResourceLocation RENDERING = ResourceLocationUtil.make("minecraft", "rendering");
-        public static final ResourceLocation WINDOW = ResourceLocationUtil.make("minecraft", "window");
-        public static final ResourceLocation INDICATORS = ResourceLocationUtil.make("minecraft", "indicators");
-        public static final ResourceLocation GRAPHICS = ResourceLocationUtil.make("minecraft", "graphics");
-        public static final ResourceLocation MIPMAPS = ResourceLocationUtil.make("minecraft", "mipmaps");
-        public static final ResourceLocation DETAILS = ResourceLocationUtil.make("minecraft", "details");
-        public static final ResourceLocation CHUNK_UPDATES = ResourceLocationUtil.make("celeritas", "chunk_updates");
-        public static final ResourceLocation RENDERING_CULLING = ResourceLocationUtil.make("celeritas", "rendering_culling");
-        public static final ResourceLocation CPU_SAVING = ResourceLocationUtil.make("celeritas", "cpu_saving");
-        public static final ResourceLocation SORTING = ResourceLocationUtil.make("celeritas", "sorting");
-        public static final ResourceLocation LIGHTING = ResourceLocationUtil.make("celeritas", "lighting");
+        public static final OptionIdentifier<Void> RENDERING = OptionIdentifier.create("minecraft", "rendering");
+        public static final OptionIdentifier<Void> WINDOW = OptionIdentifier.create("minecraft", "window");
+        public static final OptionIdentifier<Void> INDICATORS = OptionIdentifier.create("minecraft", "indicators");
+        public static final OptionIdentifier<Void> GRAPHICS = OptionIdentifier.create("minecraft", "graphics");
+        public static final OptionIdentifier<Void> MIPMAPS = OptionIdentifier.create("minecraft", "mipmaps");
+        public static final OptionIdentifier<Void> DETAILS = OptionIdentifier.create("minecraft", "details");
+        public static final OptionIdentifier<Void> CHUNK_UPDATES = OptionIdentifier.create("celeritas", "chunk_updates");
+        public static final OptionIdentifier<Void> RENDERING_CULLING = OptionIdentifier.create("celeritas", "rendering_culling");
+        public static final OptionIdentifier<Void> CPU_SAVING = OptionIdentifier.create("celeritas", "cpu_saving");
+        public static final OptionIdentifier<Void> SORTING = OptionIdentifier.create("celeritas", "sorting");
+        public static final OptionIdentifier<Void> LIGHTING = OptionIdentifier.create("celeritas", "lighting");
     }
 
     public static class Pages {
@@ -28,44 +26,44 @@ public final class StandardOptions {
     }
 
     public static class Option {
-        public static final ResourceLocation RENDER_DISTANCE = ResourceLocationUtil.make("minecraft", "render_distance");
-        public static final ResourceLocation SIMULATION_DISTANCE = ResourceLocationUtil.make("minecraft", "simulation_distance");
-        public static final ResourceLocation BRIGHTNESS = ResourceLocationUtil.make("minecraft", "brightness");
-        public static final ResourceLocation GUI_SCALE = ResourceLocationUtil.make("minecraft", "gui_scale");
-        public static final ResourceLocation FULLSCREEN = ResourceLocationUtil.make("minecraft", "fullscreen");
-        public static final ResourceLocation FULLSCREEN_RESOLUTION = ResourceLocationUtil.make("minecraft", "fullscreen_resolution");
-        public static final ResourceLocation VSYNC = ResourceLocationUtil.make("minecraft", "vsync");
-        public static final ResourceLocation MAX_FRAMERATE = ResourceLocationUtil.make("minecraft", "max_frame_rate");
-        public static final ResourceLocation VIEW_BOBBING = ResourceLocationUtil.make("minecraft", "view_bobbing");
-        public static final ResourceLocation INACTIVITY_FPS_LIMIT = ResourceLocationUtil.make("minecraft", "inactivity_fps_limit");
-        public static final ResourceLocation ATTACK_INDICATOR = ResourceLocationUtil.make("minecraft", "attack_indicator");
-        public static final ResourceLocation AUTOSAVE_INDICATOR = ResourceLocationUtil.make("minecraft", "autosave_indicator");
-        public static final ResourceLocation GRAPHICS_MODE = ResourceLocationUtil.make("minecraft", "graphics_mode");
-        public static final ResourceLocation CLOUDS = ResourceLocationUtil.make("minecraft", "clouds");
-        public static final ResourceLocation WEATHER = ResourceLocationUtil.make("minecraft", "weather");
-        public static final ResourceLocation LEAVES = ResourceLocationUtil.make("minecraft", "leaves");
-        public static final ResourceLocation PARTICLES = ResourceLocationUtil.make("minecraft", "particles");
-        public static final ResourceLocation SMOOTH_LIGHT = ResourceLocationUtil.make("minecraft", "smooth_lighting");
-        public static final ResourceLocation BIOME_BLEND = ResourceLocationUtil.make("minecraft", "biome_blend");
-        public static final ResourceLocation ENTITY_DISTANCE = ResourceLocationUtil.make("minecraft", "entity_distance");
-        public static final ResourceLocation ENTITY_SHADOWS = ResourceLocationUtil.make("minecraft", "entity_shadows");
-        public static final ResourceLocation VIGNETTE = ResourceLocationUtil.make("minecraft", "vignette");
-        public static final ResourceLocation MIPMAP_LEVEL = ResourceLocationUtil.make("minecraft", "mipmap_levels");
-        public static final ResourceLocation CHUNK_UPDATE_THREADS = ResourceLocationUtil.make("celeritas", "chunk_update_threads");
-        public static final ResourceLocation DEFFER_CHUNK_UPDATES = ResourceLocationUtil.make("celeritas", "defer_chunk_updates");
-        public static final ResourceLocation BLOCK_FACE_CULLING = ResourceLocationUtil.make("celeritas", "block_face_culling");
-        public static final ResourceLocation COMPACT_VERTEX_FORMAT = ResourceLocationUtil.make("celeritas", "compact_vertex_format");
-        public static final ResourceLocation FOG_OCCLUSION = ResourceLocationUtil.make("celeritas", "fog_occlusion");
-        public static final ResourceLocation ENTITY_CULLING = ResourceLocationUtil.make("celeritas", "entity_culling");
-        public static final ResourceLocation ANIMATE_VISIBLE_TEXTURES = ResourceLocationUtil.make("celeritas", "animate_only_visible_textures");
-        public static final ResourceLocation NO_ERROR_CONTEXT = ResourceLocationUtil.make("celeritas", "no_error_context");
-        public static final ResourceLocation PERSISTENT_MAPPING = ResourceLocationUtil.make("celeritas", "persistent_mapping");
-        public static final ResourceLocation CPU_FRAMES_AHEAD = ResourceLocationUtil.make("celeritas", "cpu_render_ahead_limit");
-        public static final ResourceLocation TRANSLUCENT_FACE_SORTING = ResourceLocationUtil.make("celeritas", "translucent_face_sorting");
-        public static final ResourceLocation USE_QUAD_NORMALS_FOR_LIGHTING = ResourceLocationUtil.make("celeritas", "use_quad_normals_for_lighting");
-        public static final ResourceLocation RENDER_PASS_OPTIMIZATION = ResourceLocationUtil.make("celeritas", "render_pass_optimization");
-        public static final ResourceLocation RENDER_PASS_CONSOLIDATION = ResourceLocationUtil.make("celeritas", "render_pass_consolidation");
-        public static final ResourceLocation USE_FASTER_CLOUDS = ResourceLocationUtil.make("celeritas", "use_faster_clouds");
-        public static final ResourceLocation ASYNC_GRAPH_SEARCH = ResourceLocationUtil.make("celeritas", "async_graph_search");
+        public static final OptionIdentifier<?> RENDER_DISTANCE = OptionIdentifier.create("minecraft", "render_distance");
+        public static final OptionIdentifier<?> SIMULATION_DISTANCE = OptionIdentifier.create("minecraft", "simulation_distance");
+        public static final OptionIdentifier<?> BRIGHTNESS = OptionIdentifier.create("minecraft", "brightness");
+        public static final OptionIdentifier<?> GUI_SCALE = OptionIdentifier.create("minecraft", "gui_scale");
+        public static final OptionIdentifier<?> FULLSCREEN = OptionIdentifier.create("minecraft", "fullscreen");
+        public static final OptionIdentifier<?> FULLSCREEN_RESOLUTION = OptionIdentifier.create("minecraft", "fullscreen_resolution");
+        public static final OptionIdentifier<?> VSYNC = OptionIdentifier.create("minecraft", "vsync");
+        public static final OptionIdentifier<?> MAX_FRAMERATE = OptionIdentifier.create("minecraft", "max_frame_rate");
+        public static final OptionIdentifier<?> VIEW_BOBBING = OptionIdentifier.create("minecraft", "view_bobbing");
+        public static final OptionIdentifier<?> INACTIVITY_FPS_LIMIT = OptionIdentifier.create("minecraft", "inactivity_fps_limit");
+        public static final OptionIdentifier<?> ATTACK_INDICATOR = OptionIdentifier.create("minecraft", "attack_indicator");
+        public static final OptionIdentifier<?> AUTOSAVE_INDICATOR = OptionIdentifier.create("minecraft", "autosave_indicator");
+        public static final OptionIdentifier<?> GRAPHICS_MODE = OptionIdentifier.create("minecraft", "graphics_mode");
+        public static final OptionIdentifier<?> CLOUDS = OptionIdentifier.create("minecraft", "clouds");
+        public static final OptionIdentifier<?> WEATHER = OptionIdentifier.create("minecraft", "weather");
+        public static final OptionIdentifier<?> LEAVES = OptionIdentifier.create("minecraft", "leaves");
+        public static final OptionIdentifier<?> PARTICLES = OptionIdentifier.create("minecraft", "particles");
+        public static final OptionIdentifier<?> SMOOTH_LIGHT = OptionIdentifier.create("minecraft", "smooth_lighting");
+        public static final OptionIdentifier<?> BIOME_BLEND = OptionIdentifier.create("minecraft", "biome_blend");
+        public static final OptionIdentifier<?> ENTITY_DISTANCE = OptionIdentifier.create("minecraft", "entity_distance");
+        public static final OptionIdentifier<?> ENTITY_SHADOWS = OptionIdentifier.create("minecraft", "entity_shadows");
+        public static final OptionIdentifier<?> VIGNETTE = OptionIdentifier.create("minecraft", "vignette");
+        public static final OptionIdentifier<?> MIPMAP_LEVEL = OptionIdentifier.create("minecraft", "mipmap_levels");
+        public static final OptionIdentifier<?> CHUNK_UPDATE_THREADS = OptionIdentifier.create("celeritas", "chunk_update_threads");
+        public static final OptionIdentifier<?> DEFFER_CHUNK_UPDATES = OptionIdentifier.create("celeritas", "defer_chunk_updates");
+        public static final OptionIdentifier<?> BLOCK_FACE_CULLING = OptionIdentifier.create("celeritas", "block_face_culling");
+        public static final OptionIdentifier<?> COMPACT_VERTEX_FORMAT = OptionIdentifier.create("celeritas", "compact_vertex_format");
+        public static final OptionIdentifier<?> FOG_OCCLUSION = OptionIdentifier.create("celeritas", "fog_occlusion");
+        public static final OptionIdentifier<?> ENTITY_CULLING = OptionIdentifier.create("celeritas", "entity_culling");
+        public static final OptionIdentifier<?> ANIMATE_VISIBLE_TEXTURES = OptionIdentifier.create("celeritas", "animate_only_visible_textures");
+        public static final OptionIdentifier<?> NO_ERROR_CONTEXT = OptionIdentifier.create("celeritas", "no_error_context");
+        public static final OptionIdentifier<?> PERSISTENT_MAPPING = OptionIdentifier.create("celeritas", "persistent_mapping");
+        public static final OptionIdentifier<?> CPU_FRAMES_AHEAD = OptionIdentifier.create("celeritas", "cpu_render_ahead_limit");
+        public static final OptionIdentifier<?> TRANSLUCENT_FACE_SORTING = OptionIdentifier.create("celeritas", "translucent_face_sorting");
+        public static final OptionIdentifier<?> USE_QUAD_NORMALS_FOR_LIGHTING = OptionIdentifier.create("celeritas", "use_quad_normals_for_lighting");
+        public static final OptionIdentifier<?> RENDER_PASS_OPTIMIZATION = OptionIdentifier.create("celeritas", "render_pass_optimization");
+        public static final OptionIdentifier<?> RENDER_PASS_CONSOLIDATION = OptionIdentifier.create("celeritas", "render_pass_consolidation");
+        public static final OptionIdentifier<?> USE_FASTER_CLOUDS = OptionIdentifier.create("celeritas", "use_faster_clouds");
+        public static final OptionIdentifier<?> ASYNC_GRAPH_SEARCH = OptionIdentifier.create("celeritas", "async_graph_search");
     }
 }

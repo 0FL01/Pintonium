@@ -3,6 +3,7 @@ package org.taumc.celeritas.api.options.structure;
 import com.google.common.collect.ImmutableList;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.TextComponentTranslation;
+import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.taumc.celeritas.CeleritasVintage;
 import org.taumc.celeritas.api.OptionPageConstructionEvent;
 import org.taumc.celeritas.api.options.OptionIdentifier;
@@ -63,6 +64,10 @@ public class OptionPage {
         }
 
         this.options = builder.build();
+    }
+
+    public OptionPage(OptionIdentifier<Void> id, TextComponent name, List<OptionGroup> groups) {
+        this(id, (ITextComponent) name, ImmutableList.copyOf(groups));
     }
 
     private ImmutableList<OptionGroup> collectExtraGroups(ImmutableList<OptionGroup> groups) {

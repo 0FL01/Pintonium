@@ -1,9 +1,7 @@
 package net.irisshaders.iris.gui;
 
 import net.irisshaders.iris.IrisCommon;
-import net.irisshaders.iris.IrisVintage;
 import net.irisshaders.iris.config.IrisConfig;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
@@ -190,15 +188,6 @@ public class VintageShaderPackSelectionScreen extends GuiScreen {
         }
 
         CeleritasShaderVersionService.INSTANCE.reload();
-        Minecraft minecraft = Minecraft.getMinecraft();
-        if (minecraft.world != null) {
-            minecraft.renderGlobal.loadRenderers();
-            if (packName == null) {
-                IrisVintage.resetVanillaGlState();
-            }
-        } else if (packName == null) {
-            IrisVintage.resetMenuGlState();
-        }
 
         this.statusMessage = packName == null ? "Shaders disabled." : "Selected " + packName + ".";
         this.initGui();
@@ -213,10 +202,6 @@ public class VintageShaderPackSelectionScreen extends GuiScreen {
 
         if (IrisCommon.getCurrentPack().isEmpty()) {
             CeleritasShaderVersionService.INSTANCE.reload();
-            Minecraft minecraft = Minecraft.getMinecraft();
-            if (minecraft.world != null) {
-                minecraft.renderGlobal.loadRenderers();
-            }
         }
 
         if (IrisCommon.getCurrentPack().isPresent()) {

@@ -9,6 +9,7 @@ import java.util.function.Function;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.ITextComponent;
 import org.apache.commons.lang3.Validate;
+import org.embeddedt.embeddium.impl.gui.framework.TextComponent;
 import org.jetbrains.annotations.Nullable;
 import org.taumc.celeritas.api.options.OptionIdentifier;
 import org.taumc.celeritas.api.options.binding.GenericBinding;
@@ -140,9 +141,9 @@ public class OptionImpl<S, T> implements Option<T> {
             return this;
         }
 
-        public Builder<S, T> setId(OptionIdentifier<T> id) {
+        public Builder<S, T> setId(OptionIdentifier<?> id) {
             Validate.notNull(id, "Id must not be null");
-            this.id = id;
+            this.id = id.cast();
             return this;
         }
 
@@ -152,10 +153,18 @@ public class OptionImpl<S, T> implements Option<T> {
             return this;
         }
 
+        public Builder<S, T> setName(TextComponent name) {
+            return this.setName((ITextComponent) name);
+        }
+
         public Builder<S, T> setTooltip(ITextComponent tooltip) {
             Validate.notNull(tooltip, "Argument must not be null");
             this.tooltip = tooltip;
             return this;
+        }
+
+        public Builder<S, T> setTooltip(TextComponent tooltip) {
+            return this.setTooltip((ITextComponent) tooltip);
         }
 
         public Builder<S, T> setBinding(BiConsumer<S, T> setter, Function<S, T> getter) {

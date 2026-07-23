@@ -8,7 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * Holds a list of event handlers and handles event dispatching.
  */
-public class EventHandlerRegistrar<T extends CeleritasEvent> {
+public class EventHandlerRegistrar<T extends EmbeddiumEvent> {
     private final List<Handler<T>> handlerList = new CopyOnWriteArrayList<>();
 
     public EventHandlerRegistrar() {}
@@ -41,12 +41,12 @@ public class EventHandlerRegistrar<T extends CeleritasEvent> {
         return canceled;
     }
 
-    private static <T extends CeleritasEvent> boolean postPlatformSpecificEvent(T event) {
+    private static <T extends EmbeddiumEvent> boolean postPlatformSpecificEvent(T event) {
         return MinecraftForge.EVENT_BUS.post(event);
     }
 
     @FunctionalInterface
-    public interface Handler<T extends CeleritasEvent> {
+    public interface Handler<T extends EmbeddiumEvent> {
         void acceptEvent(T event);
     }
 }
