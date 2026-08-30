@@ -70,15 +70,17 @@ public class SodiumTransformer {
             translationUnit.injectVariable("in vec3 iris_Normal;");
         }
 
-        // TODO: Should probably add the normal matrix as a proper uniform that's
-        // computed on the CPU-side of things
-        translationUnit.replaceExpression("gl_NormalMatrix",
-                "iris_NormalMatrix");
-        translationUnit.injectVariable("uniform mat3 iris_NormalMatrix;");
+		translationUnit.injectVariable("uniform mat4 iris_ModelViewMatrixInverse;");
 
-        translationUnit.injectVariable("uniform mat4 iris_ModelViewMatrixInverse;");
+		// Chunk terrain is only translated and rotated, never non-uniformly scaled,
+		// so its inverse-transpose normal matrix is the rotation part of the same
+		// model-view matrix used for positions. Deriving it from that matrix keeps
+		// normals, gbufferModelView axes, and celestial vectors in one coordinate
+		// space even when the legacy GL stacks are changed by another render pass.
+		translationUnit.replaceExpression("gl_NormalMatrix",
+				"mat3(iris_ModelViewMatrix)");
 
-        translationUnit.injectVariable("uniform mat4 iris_ProjectionMatrixInverse;");
+		translationUnit.injectVariable("uniform mat4 iris_ProjectionMatrixInverse;");
 
         // TODO: All of the transformed variants of the input matrices, preferably
         // computed on the CPU side...

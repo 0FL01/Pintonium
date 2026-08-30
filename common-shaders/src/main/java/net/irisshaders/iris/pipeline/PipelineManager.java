@@ -18,7 +18,12 @@ import org.taumc.celeritas.CeleritasShaderVersionService;
 public class PipelineManager {
 	private final Function<NamespacedId, WorldRenderingPipeline> pipelineFactory;
 	private final Map<NamespacedId, WorldRenderingPipeline> pipelinesPerDimension = new HashMap<>();
-	private WorldRenderingPipeline pipeline = CeleritasShaderVersionService.INSTANCE.createVanillaRenderingPipeline();
+	/*
+	 * Chunk meshes are compiled on worker threads. Publishing the active pipeline
+	 * through a volatile reference ensures those workers see shaderpack lighting
+	 * directives (notably oldLighting=false) immediately after a pipeline switch.
+	 */
+	private volatile WorldRenderingPipeline pipeline = CeleritasShaderVersionService.INSTANCE.createVanillaRenderingPipeline();
 	private int versionCounterForSodiumShaderReload = 0;
 
 	public PipelineManager(Function<NamespacedId, WorldRenderingPipeline> pipelineFactory) {

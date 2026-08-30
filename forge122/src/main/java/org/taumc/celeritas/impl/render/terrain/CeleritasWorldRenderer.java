@@ -21,6 +21,7 @@ import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.embeddedt.embeddium.impl.render.terrain.SimpleWorldRenderer;
 import org.joml.Matrix4f;
 import org.taumc.celeritas.CeleritasVintage;
+import org.taumc.celeritas.impl.render.GlMatrixSnapshot;
 import org.taumc.celeritas.mixin.core.terrain.ActiveRenderInfoAccessor;
 
 import java.util.*;
@@ -52,7 +53,27 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
 
     @Override
     protected ChunkRenderMatrices createChunkRenderMatrices() {
-        return new ChunkRenderMatrices(ActiveRenderInfoAccessor.getProjectionMatrix(), ActiveRenderInfoAccessor.getModelViewMatrix());
+        if (GlMatrixSnapshot.isRenderingShadowPass()) {
+            // Shadow terrain must use the live sun camera established by the pack.
+            // Reusing the saved player camera here produces an invalid/empty shadow
+            // map, which looks like directional light leaking through the world.
+            GlMatrixSnapshot shadowCamera = GlMatrixSnapshot.capture();
+            return new ChunkRenderMatrices(shadowCamera.projection(), shadowCamera.modelView());
+        }
+
+        GlMatrixSnapshot mainCamera = GlMatrixSnapshot.getMainCamera();
+        if (mainCamera != null) {
+            // ActiveRenderInfo's static buffers are overwritten by the shader shadow
+            // camera. Use the player camera captured before shadows so the terrain
+            // normal matrix and the pack's celestial uniforms share the same space.
+            return new ChunkRenderMatrices(
+                    new Matrix4f(mainCamera.projection()),
+                    new Matrix4f(mainCamera.modelView()));
+        }
+
+        return new ChunkRenderMatrices(
+                new Matrix4f(ActiveRenderInfoAccessor.getProjectionMatrix()),
+                new Matrix4f(ActiveRenderInfoAccessor.getModelViewMatrix()));
     }
 
     @Override

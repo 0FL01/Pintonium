@@ -8,8 +8,9 @@ plugins {
     id("org.taumc.gradle.publishing")
 }
 
-project.version = tau.versioning.version(rootProject.property("project_base_version").toString(), rootProject.findProperty("release_channel"))
-println("Pintonium: ${tau.versioning.version}")
+val calculatedVersion = tau.versioning.version(rootProject.property("project_base_version").toString(), rootProject.findProperty("release_channel"))
+project.version = rootProject.findProperty("project_version_override")?.toString() ?: calculatedVersion
+println("Pintonium: ${project.version}")
 
 //project(":forge1710")
 

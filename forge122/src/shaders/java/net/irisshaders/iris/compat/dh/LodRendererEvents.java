@@ -23,11 +23,11 @@ import com.seibel.distanthorizons.api.methods.events.abstractEvents.DhApiColorDe
 import com.seibel.distanthorizons.api.methods.events.sharedParameterObjects.DhApiCancelableEventParam;
 import com.seibel.distanthorizons.api.methods.events.sharedParameterObjects.DhApiEventParam;
 import com.seibel.distanthorizons.api.methods.events.sharedParameterObjects.DhApiRenderParam;
-import com.seibel.distanthorizons.api.objects.math.DhApiMat4f;
 import com.seibel.distanthorizons.api.objects.math.DhApiVec3f;
 import com.seibel.distanthorizons.coreapi.DependencyInjection.OverrideInjector;
 import net.irisshaders.iris.IrisCommon;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
+import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL43C;
 
@@ -152,8 +152,22 @@ public class LodRendererEvents {
 		return renderPass == EDhApiRenderPass.OPAQUE || renderPass == EDhApiRenderPass.OPAQUE_AND_TRANSPARENT;
 	}
 
-	private static Matrix4f toJOML(DhApiMat4f matrix) {
-		return new Matrix4f().setTransposed(matrix.getValuesAsArray());
+	private static Matrix4f createLodProjection(DhApiRenderParam renderParam) {
+		Matrix4f gbufferProjection = new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferProjection());
+		float nearPlane = renderParam.nearClipPlane;
+		float farPlane = renderParam.farClipPlane;
+		if (!Float.isFinite(nearPlane) || !Float.isFinite(farPlane) || nearPlane <= 0.0f || farPlane <= nearPlane) {
+			return gbufferProjection;
+		}
+
+		// DH vertices are camera-relative, so use the same FOV and aspect ratio as the
+		// g-buffer while extending only its clip range. Reconstructing a clean perspective
+		// matrix avoids carrying fixed-function offsets into DH's temporal depth history.
+		return new Matrix4f().setPerspective(
+			gbufferProjection.perspectiveFov(),
+			gbufferProjection.m11() / gbufferProjection.m00(),
+			nearPlane,
+			farPlane);
 	}
 
 	private static void setupCreateDepthTextureEvent() {
@@ -211,6 +225,11 @@ public class LodRendererEvents {
 					if (isRenderingShadows()) {
 						event.cancelEvent();
 					} else if (getInstance().shouldOverride) {
+						// This handler cancels DH's own clear, including the glClearDepth(1.0)
+						// immediately preceding it. Never inherit a clear value left by another
+						// shader pass: sky pixels in dhDepthTex must be exactly 1.0 so packs do
+						// not mistake the entire background for DH geometry.
+						GL43C.glClearDepth(1.0);
 						GL43C.glClear(GL43C.GL_DEPTH_BUFFER_BIT);
 						event.cancelEvent();
 					}
@@ -300,8 +319,8 @@ public class LodRendererEvents {
 					float partialTicks = event.value.partialTicks;
 
 					if (instance.shouldOverride) {
-						Matrix4f projection = toJOML(event.value.dhProjectionMatrix);
-						Matrix4f modelView = toJOML(event.value.dhModelViewMatrix);
+						Matrix4f projection = createLodProjection(event.value);
+						Matrix4f modelView = new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView());
 						DHCompat.setProjection(projection);
 						instance.getSolidShader().fillUniformData(
 							projection,
@@ -319,8 +338,8 @@ public class LodRendererEvents {
 						instance.copyTranslucents(textureWidth, textureHeight);
 						instance.getTranslucentShader().bind();
                         GL_STATE_MANAGER.disableCullFace();
-						Matrix4f projection = toJOML(event.value.dhProjectionMatrix);
-						Matrix4f modelView = toJOML(event.value.dhModelViewMatrix);
+						Matrix4f projection = createLodProjection(event.value);
+						Matrix4f modelView = new Matrix4f(CapturedRenderingState.INSTANCE.getGbufferModelView());
 						DHCompat.setProjection(projection);
 
 						instance.getTranslucentShader().fillUniformData(

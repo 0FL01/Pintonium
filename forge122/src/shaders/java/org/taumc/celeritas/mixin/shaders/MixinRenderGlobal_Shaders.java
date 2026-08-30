@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.taumc.celeritas.impl.compat.distanthorizons.DhRenderStateSnapshot;
 
 @Mixin(RenderGlobal.class)
 public class MixinRenderGlobal_Shaders {
@@ -34,8 +35,17 @@ public class MixinRenderGlobal_Shaders {
             pipeline.beginTranslucents();
             if (pipeline instanceof CommonIrisRenderingPipeline) {
                 CommonIrisRenderingPipeline commonPipeline = (CommonIrisRenderingPipeline) pipeline;
-                DHCompat.renderDeferredLods();
-                commonPipeline.bindDefault();
+                DhRenderStateSnapshot state = DhRenderStateSnapshot.capture();
+                try {
+                    DHCompat.renderDeferredLods();
+                } finally {
+                    // DH 3.2 only restores a subset of the state it changes. In particular,
+                    // its cleanup hard-resets blending and leaves viewport/cull/scissor/depth
+                    // state behind. Isolate the external render pass so a shader reload or a
+                    // cancelled DH pass cannot contaminate the translucent terrain pass.
+                    commonPipeline.bindDefault();
+                    state.restore();
+                }
             }
         }
     }

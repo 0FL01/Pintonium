@@ -31,6 +31,7 @@ import org.embeddedt.embeddium.impl.render.chunk.occlusion.VisibilityEncoding;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
 import org.embeddedt.embeddium.impl.util.task.CancellationToken;
 import org.joml.Vector3d;
+import org.taumc.celeritas.impl.compat.betterfoliage.BetterFoliageCompat;
 import org.taumc.celeritas.impl.compat.fluidlogged.FluidloggedCompat;
 import org.taumc.celeritas.impl.compat.leafculling.CeleritasLeafCullingCompat;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
@@ -111,9 +112,9 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                         }
 
                         boolean leafLike = CeleritasLeafCullingCompat.isLeafLike(blockState);
-                        boolean renderLeavesAsSolid = CeleritasLeafCullingCompat.shouldRenderSurroundedLeavesAsSolid(blockState, slice, blockPos);
 
-                        if (leafLike) {
+                        if (leafLike && !BetterFoliageCompat.isAvailable()) {
+                            boolean renderLeavesAsSolid = CeleritasLeafCullingCompat.shouldRenderSurroundedLeavesAsSolid(blockState, slice, blockPos);
                             BlockRenderLayer leafLayer = CeleritasLeafCullingCompat.shouldUseSolidRenderLayer(blockState, renderLeavesAsSolid)
                                     ? BlockRenderLayer.SOLID
                                     : CeleritasLeafCullingCompat.getLeafRenderLayer(blockState, false);
@@ -124,11 +125,11 @@ public class ChunkBuilderMeshingTask extends ChunkBuilderTask<ChunkBuildOutput> 
                             buildContext.recordRenderedQuads(leafLayer, startVertex, buffer.getVertexCount(), blockState, blockPos);
                         } else {
                             for (BlockRenderLayer layer : VintageChunkBuildContext.LAYERS) {
-                                if (block.canRenderInLayer(blockState, layer)) {
+                                if (BetterFoliageCompat.canRenderBlockInLayer(block, blockState, layer)) {
                                     ForgeHooksClient.setRenderLayer(layer);
                                     var buffer = buildContext.getBufferForLayer(layer);
                                     int startVertex = buffer.getVertexCount();
-                                    dispatcher.renderBlock(blockState, blockPos, slice, buffer);
+                                    BetterFoliageCompat.renderBlock(dispatcher, blockState, blockPos, slice, buffer, layer);
                                     buildContext.recordRenderedQuads(layer, startVertex, buffer.getVertexCount(), blockState, blockPos);
                                 }
                             }

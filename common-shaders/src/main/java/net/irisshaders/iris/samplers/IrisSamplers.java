@@ -187,6 +187,56 @@ public class IrisSamplers {
 		return usesShadows;
 	}
 
+	/**
+	 * Supplies an empty but type-correct shadow map when a platform has allocated
+	 * shadow targets but cannot render the shadow pass. A color white-pixel is not
+	 * a valid backing texture for sampler2DShadow and can make hardware-comparison
+	 * packs treat the entire world as shadowed (or generate GL_INVALID_OPERATION).
+	 */
+	public static boolean addDisabledShadowSamplers(SamplerHolder samplers, ShadowRenderTargets shadowRenderTargets,
+			MCAbstractTexture whitePixel, boolean separateHardwareSamplers) {
+		boolean waterShadowEnabled = samplers.hasSampler("watershadow");
+		boolean usesShadows;
+
+		if (waterShadowEnabled) {
+			usesShadows = true;
+			samplers.addDynamicSampler(TextureType.TEXTURE_2D, shadowRenderTargets.getDepthTexture()::getTextureId,
+				separateHardwareSamplers ? null : (shadowRenderTargets.isHardwareFiltered(0)
+					? shadowRenderTargets.isLinearFiltered(0) ? SHADOW_SAMPLER_LINEAR : SHADOW_SAMPLER_NEAREST : null),
+				"shadowtex0", "watershadow");
+			samplers.addDynamicSampler(TextureType.TEXTURE_2D, shadowRenderTargets.getDepthTextureNoTranslucents()::getTextureId,
+				separateHardwareSamplers ? null : (shadowRenderTargets.isHardwareFiltered(1)
+					? shadowRenderTargets.isLinearFiltered(1) ? SHADOW_SAMPLER_LINEAR : SHADOW_SAMPLER_NEAREST : null),
+				"shadowtex1", "shadow");
+		} else {
+			usesShadows = samplers.addDynamicSampler(TextureType.TEXTURE_2D, shadowRenderTargets.getDepthTexture()::getTextureId,
+				separateHardwareSamplers ? null : (shadowRenderTargets.isHardwareFiltered(0)
+					? shadowRenderTargets.isLinearFiltered(0) ? SHADOW_SAMPLER_LINEAR : SHADOW_SAMPLER_NEAREST : null),
+				"shadowtex0", "shadow");
+			usesShadows |= samplers.addDynamicSampler(TextureType.TEXTURE_2D, shadowRenderTargets.getDepthTextureNoTranslucents()::getTextureId,
+				separateHardwareSamplers ? null : (shadowRenderTargets.isHardwareFiltered(1)
+					? shadowRenderTargets.isLinearFiltered(1) ? SHADOW_SAMPLER_LINEAR : SHADOW_SAMPLER_NEAREST : null),
+				"shadowtex1");
+		}
+
+		if (shadowRenderTargets.isHardwareFiltered(0) && separateHardwareSamplers) {
+			samplers.addDynamicSampler(TextureType.TEXTURE_2D, shadowRenderTargets.getDepthTexture()::getTextureId,
+				shadowRenderTargets.isLinearFiltered(0) ? SHADOW_SAMPLER_LINEAR : SHADOW_SAMPLER_NEAREST, "shadowtex0HW");
+		}
+
+		if (shadowRenderTargets.isHardwareFiltered(1) && separateHardwareSamplers) {
+			samplers.addDynamicSampler(TextureType.TEXTURE_2D, shadowRenderTargets.getDepthTextureNoTranslucents()::getTextureId,
+				shadowRenderTargets.isLinearFiltered(1) ? SHADOW_SAMPLER_LINEAR : SHADOW_SAMPLER_NEAREST, "shadowtex1HW");
+		}
+
+		usesShadows |= samplers.addDynamicSampler(whitePixel::getId, "shadowcolor");
+		for (int i = 0; i < IrisConstants.MAX_SHADOW_COLOR_BUFFERS_IRIS; i++) {
+			usesShadows |= samplers.addDynamicSampler(whitePixel::getId, "shadowcolor" + i);
+		}
+
+		return usesShadows;
+	}
+
 	public static boolean hasPBRSamplers(SamplerHolder samplers) {
 		return samplers.hasSampler("normals") || samplers.hasSampler("specular");
 	}

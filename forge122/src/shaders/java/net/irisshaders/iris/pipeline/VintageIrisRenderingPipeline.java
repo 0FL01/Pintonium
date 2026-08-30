@@ -15,6 +15,7 @@ import net.irisshaders.iris.layer.GbufferPrograms;
 import net.irisshaders.iris.pipeline.programs.ShaderKey;
 import net.irisshaders.iris.samplers.IrisSamplers;
 import net.irisshaders.iris.shaderpack.loading.ProgramId;
+import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
 import net.irisshaders.iris.shaderpack.programs.ProgramSet;
 import net.irisshaders.iris.shaderpack.programs.ProgramSource;
 import net.irisshaders.iris.shaderpack.properties.PackDirectives;
@@ -38,6 +39,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
@@ -81,6 +83,8 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private BlendModeOverride vintageBlockEntityCompatBlendOverride;
     private List<BufferBlendOverride> vintageBlockEntityCompatBufferBlendOverrides = Collections.emptyList();
     private boolean vintageBlockEntityCompatRenderingActive;
+    private boolean vintageBlockEntityUsesShaderPackProgram;
+    private boolean vintageBlockEntityBridgeLogged;
 
     @Nullable
     private Program vintageParticleCompatProgram;
@@ -168,6 +172,8 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     public void addDebugText(List<String> messages) {
         messages.add("[Iris] 1.12 shader pipeline: composite/final MVP");
         messages.add("[Iris] Terrain shader overrides: Pintonium chunk renderer bridge enabled");
+        messages.add("[Iris] Vanilla terrain face shading disabled: "
+                + WorldRenderingSettings.INSTANCE.shouldDisableDirectionalShading());
         if (this.shadowRenderer == null) {
             messages.add("[Iris] Shadow Maps: not used by shader pack or not implemented on 1.12 yet");
         }
@@ -236,14 +242,15 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         try {
             int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
             boolean solasStyleEntityLayout = this.celeritas$isColorAndAuxBufferLayout(drawBuffers);
+            boolean pbrFresnelEntityLayout = this.celeritas$isPbrFresnelLayout(source, drawBuffers);
             // If the pack entity program cannot be used, keep the fallback restrained for
             // Solas-style color+aux layouts so the generic bridge does not over-brighten mobs.
-            boolean useDirectEntityLightmapColor = solasStyleEntityLayout;
+            boolean useDirectEntityLightmapColor = solasStyleEntityLayout || pbrFresnelEntityLayout;
             ProgramBuilder builder = ProgramBuilder.begin(
                     source.getName() + "_celeritas_legacy_compat",
                     this.celeritas$getLegacyCompatibilityVertexSource(),
                     null,
-                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, true, true, useDirectEntityLightmapColor, true, true, false, solasStyleEntityLayout),
+                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, true, true, useDirectEntityLightmapColor, true, true, false, solasStyleEntityLayout, pbrFresnelEntityLayout),
                     IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
 
             builder.addExternalSampler(IrisSamplers.ALBEDO_TEXTURE_UNIT, "tex", "texture", "gtexture");
@@ -275,14 +282,20 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             return;
         }
 
+        int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
+        boolean pbrFresnelBlockLayout = this.celeritas$isPbrFresnelLayout(source, drawBuffers);
+        if (this.celeritas$isColorAndAuxBufferLayout(drawBuffers)
+                && this.celeritas$tryCreateVintageShaderPackBlockEntityProgram(source, drawBuffers)) {
+            return;
+        }
+
         try {
-            int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
             boolean solasStyleBlockLayout = this.celeritas$isColorAndAuxBufferLayout(drawBuffers);
             ProgramBuilder builder = ProgramBuilder.begin(
                     source.getName() + "_celeritas_block_entity_compat",
                     this.celeritas$getLegacyCompatibilityVertexSource(),
                     null,
-                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, false, false, !solasStyleBlockLayout, false, false, false, solasStyleBlockLayout),
+                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, false, false, !solasStyleBlockLayout, true, false, false, solasStyleBlockLayout, pbrFresnelBlockLayout),
                     IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
 
             builder.addExternalSampler(IrisSamplers.ALBEDO_TEXTURE_UNIT, "tex", "texture", "gtexture");
@@ -294,18 +307,54 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             this.vintageBlockEntityCompatFramebufferAfterTranslucent = this.renderTargets.createGbufferFramebuffer(this.flippedAfterTranslucent, drawBuffers);
             this.vintageBlockEntityCompatBlendOverride = source.getDirectives().getBlendModeOverride().orElse(ProgramId.Block.getBlendModeOverride());
             this.vintageBlockEntityCompatBufferBlendOverrides = this.celeritas$createBufferBlendOverrides(source);
+            this.vintageBlockEntityUsesShaderPackProgram = false;
         } catch (RuntimeException e) {
-            if (this.vintageBlockEntityCompatProgram != null) {
-                this.vintageBlockEntityCompatProgram.delete();
-            }
-
-            this.vintageBlockEntityCompatProgram = null;
-            this.vintageBlockEntityCompatFramebufferBeforeTranslucent = null;
-            this.vintageBlockEntityCompatFramebufferAfterTranslucent = null;
-            this.vintageBlockEntityCompatBlendOverride = null;
-            this.vintageBlockEntityCompatBufferBlendOverrides = Collections.emptyList();
+            this.celeritas$clearVintageBlockEntityProgram();
             IRIS_LOGGER.warn("Failed to create the 1.12 legacy block entity compatibility shader. Block entities will use vanilla rendering for this shader pack.", e);
         }
+    }
+
+    private boolean celeritas$tryCreateVintageShaderPackBlockEntityProgram(ProgramSource source, int[] drawBuffers) {
+        try {
+            ProgramBuilder builder = ProgramBuilder.begin(
+                    source.getName() + "_celeritas_block_entity",
+                    source.getSourceNullable(ShaderType.VERTEX),
+                    source.getSourceNullable(ShaderType.GEOMETRY),
+                    source.getSourceNullable(ShaderType.FRAGMENT),
+                    IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
+
+            CommonUniforms.addCommonUniforms(builder, this.pack.getIdMap(), this.packDirectives, this.updateNotifier, FogMode.PER_VERTEX);
+            this.customUniforms.assignTo(builder);
+            this.addGbufferOrShadowSamplers(builder, builder,
+                    () -> this.isBeforeTranslucent ? this.flippedAfterPrepare : this.flippedAfterTranslucent,
+                    false, true, true, false);
+
+            this.vintageBlockEntityCompatProgram = builder.build();
+            this.customUniforms.mapholderToPass(builder, this.vintageBlockEntityCompatProgram);
+            this.vintageBlockEntityCompatFramebufferBeforeTranslucent = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, drawBuffers);
+            this.vintageBlockEntityCompatFramebufferAfterTranslucent = this.renderTargets.createGbufferFramebuffer(this.flippedAfterTranslucent, drawBuffers);
+            this.vintageBlockEntityCompatBlendOverride = source.getDirectives().getBlendModeOverride().orElse(ProgramId.Block.getBlendModeOverride());
+            this.vintageBlockEntityCompatBufferBlendOverrides = this.celeritas$createBufferBlendOverrides(source, drawBuffers);
+            this.vintageBlockEntityUsesShaderPackProgram = true;
+            return true;
+        } catch (RuntimeException e) {
+            this.celeritas$clearVintageBlockEntityProgram();
+            IRIS_LOGGER.warn("Failed to create the shader pack block program for 1.12 block entities. Falling back to the generic compatibility bridge.", e);
+            return false;
+        }
+    }
+
+    private void celeritas$clearVintageBlockEntityProgram() {
+        if (this.vintageBlockEntityCompatProgram != null) {
+            this.vintageBlockEntityCompatProgram.delete();
+        }
+
+        this.vintageBlockEntityCompatProgram = null;
+        this.vintageBlockEntityCompatFramebufferBeforeTranslucent = null;
+        this.vintageBlockEntityCompatFramebufferAfterTranslucent = null;
+        this.vintageBlockEntityCompatBlendOverride = null;
+        this.vintageBlockEntityCompatBufferBlendOverrides = Collections.emptyList();
+        this.vintageBlockEntityUsesShaderPackProgram = false;
     }
 
     private void createVintageParticleCompatibilityProgram() {
@@ -533,16 +582,38 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private boolean celeritas$prefersShaderPackEntityProgram(ProgramSource source) {
         int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
 
-        // Solas-style programs own their deferred entity lighting; use them when available.
-        return this.vintageEntityProgram != null && this.vintageEntityFramebuffer != null;
+        // Legacy models do not provide tangent/PBR attributes. The pack program can turn
+        // their normals into NaNs or black pixels, so use the compatibility program.
+        return this.vintageEntityProgram != null && this.vintageEntityFramebuffer != null
+                && !this.celeritas$isPbrFresnelLayout(source, drawBuffers);
     }
 
     private boolean celeritas$isColorAndAuxBufferLayout(int[] drawBuffers) {
         return drawBuffers.length == 2 && drawBuffers[0] == 0 && drawBuffers[1] == 3;
     }
 
+    private boolean celeritas$isPbrFresnelLayout(ProgramSource source, int[] drawBuffers) {
+        if (drawBuffers.length != 4 || drawBuffers[0] != 0 || drawBuffers[1] != 3
+                || drawBuffers[2] != 6 || drawBuffers[3] != 7) {
+            return false;
+        }
+
+        String fragmentSource = source.getSourceNullable(ShaderType.FRAGMENT);
+        if (fragmentSource == null) {
+            return false;
+        }
+
+        String lowerSource = fragmentSource.toLowerCase(Locale.ROOT);
+        return lowerSource.contains("fresnel")
+                && lowerSource.contains("encodenormal")
+                && lowerSource.contains("gl_fragdata[3]");
+    }
+
     private List<BufferBlendOverride> celeritas$createBufferBlendOverrides(ProgramSource source) {
-        int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
+        return this.celeritas$createBufferBlendOverrides(source, this.celeritas$drawBuffersOrDefault(source));
+    }
+
+    private List<BufferBlendOverride> celeritas$createBufferBlendOverrides(ProgramSource source, int[] drawBuffers) {
         List<BufferBlendOverride> bufferOverrides = new ArrayList<>();
         source.getDirectives().getBufferBlendOverrides().forEach(information -> {
             int index = Ints.indexOf(drawBuffers, information.index());
@@ -588,14 +659,18 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     }
 
     private String celeritas$getLegacyCompatibilityFragmentSource(int[] drawBuffers, boolean entityPass, boolean clampEntityLight, boolean directLightmapColor, boolean attenuateSkyLight, boolean floorNoSkylightEntityLight) {
-        return this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, entityPass, clampEntityLight, directLightmapColor, attenuateSkyLight, floorNoSkylightEntityLight, false);
+        return this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, entityPass, clampEntityLight, directLightmapColor, attenuateSkyLight, floorNoSkylightEntityLight, false, false, false);
     }
 
     private String celeritas$getLegacyCompatibilityFragmentSource(int[] drawBuffers, boolean entityPass, boolean clampEntityLight, boolean directLightmapColor, boolean attenuateSkyLight, boolean floorNoSkylightEntityLight, boolean clearTranslucentAux) {
-        return this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, entityPass, clampEntityLight, directLightmapColor, attenuateSkyLight, floorNoSkylightEntityLight, clearTranslucentAux, false);
+        return this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, entityPass, clampEntityLight, directLightmapColor, attenuateSkyLight, floorNoSkylightEntityLight, clearTranslucentAux, false, false);
     }
 
     private String celeritas$getLegacyCompatibilityFragmentSource(int[] drawBuffers, boolean entityPass, boolean clampEntityLight, boolean directLightmapColor, boolean attenuateSkyLight, boolean floorNoSkylightEntityLight, boolean clearTranslucentAux, boolean capBlockLight) {
+        return this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, entityPass, clampEntityLight, directLightmapColor, attenuateSkyLight, floorNoSkylightEntityLight, clearTranslucentAux, capBlockLight, false);
+    }
+
+    private String celeritas$getLegacyCompatibilityFragmentSource(int[] drawBuffers, boolean entityPass, boolean clampEntityLight, boolean directLightmapColor, boolean attenuateSkyLight, boolean floorNoSkylightEntityLight, boolean clearTranslucentAux, boolean capBlockLight, boolean pbrFresnelBlockLayout) {
         StringBuilder source = new StringBuilder();
         source.append("#version 130\n")
                 .append("uniform sampler2D tex;\n")
@@ -629,7 +704,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
 
         for (int i = 0; i < drawBuffers.length; i++) {
             source.append("    gl_FragData[").append(i).append("] = ")
-                    .append(this.celeritas$getLegacyCompatibilityOutput(drawBuffers[i], drawBuffers, entityPass, clearTranslucentAux))
+                    .append(this.celeritas$getLegacyCompatibilityOutput(drawBuffers[i], drawBuffers, entityPass, clearTranslucentAux, pbrFresnelBlockLayout))
                     .append(";\n");
         }
 
@@ -637,7 +712,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         return source.toString();
     }
 
-    private String celeritas$getLegacyCompatibilityOutput(int drawBuffer, int[] drawBuffers, boolean entityPass, boolean clearTranslucentAux) {
+    private String celeritas$getLegacyCompatibilityOutput(int drawBuffer, int[] drawBuffers, boolean entityPass, boolean clearTranslucentAux, boolean pbrFresnelBlockLayout) {
         boolean hasRawAlbedoBuffer = Ints.contains(drawBuffers, 1);
         boolean hasWorldNormalBuffer = Ints.contains(drawBuffers, 4);
         boolean hasMaterialBuffer = Ints.contains(drawBuffers, 6);
@@ -658,6 +733,10 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
                 if (clearTranslucentAux) {
                     return "vec4(0.0, 0.0, 0.0, 1.0)";
                 }
+                if (pbrFresnelBlockLayout) {
+                    // This PBR contract stores smoothness and half-range sky light in colortex3.
+                    return "vec4(0.0, compatSkyLight * 0.5, 0.0, 1.0)";
+                }
                 if (complementaryUnboundLayout || materialOnlyTranslucencyLayout) {
                     return "vec4(1.0 - translucentMult, 1.0)";
                 }
@@ -671,11 +750,19 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             case 4:
                 return "vec4(normalize(vNormal), 1.0)";
             case 6:
+                if (pbrFresnelBlockLayout) {
+                    // Legacy TESRs have normals but no Iris tangent/material attributes.
+                    return "vec4(normalize(vNormal).xy * 0.5 + 0.5, float(gl_FragCoord.z < 1.0), 1.0)";
+                }
                 if (oldComplementaryLayout) {
                     return "vec4(normalize(vNormal).xy * 0.5 + 0.5, 0.0, 1.0)";
                 }
                 return "vec4(0.0, 0.0, compatSkyLight, 1.0)";
             case 7:
+                if (pbrFresnelBlockLayout) {
+                    // White means maximum Fresnel in this contract and makes TESRs glow by angle.
+                    return "vec4(0.0, 0.0, 0.0, 1.0)";
+                }
                 return "vec4(1.0)";
             default:
                 return "vec4(0.0, 0.0, 0.0, 1.0)";
@@ -786,6 +873,13 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
 
         if (framebuffer == null) {
             return false;
+        }
+
+        if (!this.vintageBlockEntityBridgeLogged) {
+            IRIS_LOGGER.info(this.vintageBlockEntityUsesShaderPackProgram
+                    ? "Using the shader pack block program for the 1.12 block entity bridge."
+                    : "Using the generic 1.12 block entity compatibility shader bridge.");
+            this.vintageBlockEntityBridgeLogged = true;
         }
 
         this.removePhaseIfNeeded();

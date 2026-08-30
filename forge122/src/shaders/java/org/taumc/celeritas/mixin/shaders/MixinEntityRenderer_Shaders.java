@@ -14,14 +14,13 @@ import net.irisshaders.iris.uniforms.SystemTimeUniforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.entity.Entity;
-import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.taumc.celeritas.mixin.core.terrain.ActiveRenderInfoAccessor;
+import org.taumc.celeritas.impl.render.GlMatrixSnapshot;
 
 @Mixin(EntityRenderer.class)
 public class MixinEntityRenderer_Shaders {
@@ -35,9 +34,14 @@ public class MixinEntityRenderer_Shaders {
     private boolean iris$handBridgeActive;
 
     @Unique
+    private GlMatrixSnapshot iris$gbufferMatrices;
+
+    @Unique
     private void iris$captureGbufferMatrices() {
-        CapturedRenderingState.INSTANCE.setGbufferProjection(new Matrix4f(ActiveRenderInfoAccessor.getProjectionMatrix()));
-        CapturedRenderingState.INSTANCE.setGbufferModelView(new Matrix4f(ActiveRenderInfoAccessor.getModelViewMatrix()));
+        GlMatrixSnapshot matrices = GlMatrixSnapshot.captureMainCamera();
+        this.iris$gbufferMatrices = matrices;
+        CapturedRenderingState.INSTANCE.setGbufferProjection(matrices.projection());
+        CapturedRenderingState.INSTANCE.setGbufferModelView(matrices.modelView());
     }
 
     @Unique
@@ -72,6 +76,8 @@ public class MixinEntityRenderer_Shaders {
     @Inject(method = "renderWorldPass(IFJ)V", at = @At("HEAD"))
     private void iris$setupPipeline(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         this.iris$pipeline = null;
+        this.iris$gbufferMatrices = null;
+        GlMatrixSnapshot.clearMainCamera();
         DHCompat.checkFrame();
 
         if (pass != 2 || this.mc.world == null || this.mc.getRenderViewEntity() == null) {
@@ -104,7 +110,6 @@ public class MixinEntityRenderer_Shaders {
     @Inject(method = "renderWorldPass(IFJ)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GlStateManager;clear(I)V", shift = At.Shift.AFTER, ordinal = 0))
     private void iris$beginLevelRendering(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         if (pass == 2 && this.iris$pipeline != null) {
-            this.iris$captureGbufferMatrices();
             SystemTimeUniforms.COUNTER.beginFrame();
             SystemTimeUniforms.TIMER.beginFrame(System.nanoTime());
             this.iris$pipeline.beginLevelRendering();
@@ -115,11 +120,30 @@ public class MixinEntityRenderer_Shaders {
         }
     }
 
+    @Inject(method = "renderWorldPass(IFJ)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/EntityRenderer;setupCameraTransform(FI)V", shift = At.Shift.AFTER))
+    private void iris$captureCurrentFrameMatrices(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
+        if (pass == 2 && this.iris$pipeline != null) {
+            this.iris$captureGbufferMatrices();
+        }
+    }
+
     @Inject(method = "renderWorldPass(IFJ)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V", shift = At.Shift.AFTER))
     private void iris$runPreparePass(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         if (pass == 2 && this.iris$pipeline != null) {
-            this.iris$pipeline.renderShadows(null, null);
-            this.iris$bindDefaultFramebuffer();
+            GlMatrixSnapshot.setRenderingShadowPass(true);
+            try {
+                this.iris$pipeline.renderShadows(null, null);
+            } finally {
+                GlMatrixSnapshot.setRenderingShadowPass(false);
+                this.iris$bindDefaultFramebuffer();
+                if (this.iris$gbufferMatrices != null) {
+                    // DH 3.2 captures the legacy GL matrices at SOLID terrain HEAD for
+                    // culling and section placement. The shadow renderer leaves its sun
+                    // camera on those stacks, so restore the main camera before DH's mixin
+                    // and Pintonium's terrain renderer can observe it.
+                    this.iris$gbufferMatrices.restore();
+                }
+            }
         }
     }
 
@@ -148,6 +172,7 @@ public class MixinEntityRenderer_Shaders {
         if (pass == 2 && this.iris$pipeline != null) {
             this.iris$pipeline.finalizeLevelRendering();
             this.iris$pipeline = null;
+            this.iris$gbufferMatrices = null;
         }
     }
 }

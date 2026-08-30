@@ -508,6 +508,14 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
                 for (ClearPass clearPass : passes) {
                     clearPass.execute(emptyClearColor);
                 }
+
+				// Vintage 1.12 currently has no world shadow renderer. Keep both
+				// allocated depth textures synchronized at the cleared depth (1.0),
+				// so shader packs sample a valid fully-lit shadow map instead of an
+				// undefined texture or an incompatible RGBA white-pixel.
+				if (shadowRenderer == null) {
+					shadowRenderTargets.copyPreTranslucentDepth();
+				}
             }
         }
 
@@ -657,6 +665,9 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
     private void addWorldShadowSamplers(SamplerHolder samplers) {
         if (hasUsableShadowRenderer()) {
             IrisSamplers.addShadowSamplers(samplers, shadowRenderTargets, null, separateHardwareSamplers);
+		} else if (shadowRenderTargets != null) {
+			IrisSamplers.addDisabledShadowSamplers(samplers, shadowRenderTargets,
+				(MCAbstractTexture) whitePixel, separateHardwareSamplers);
         } else {
             IrisSamplers.addDisabledShadowSamplers(samplers, (MCAbstractTexture) whitePixel);
         }

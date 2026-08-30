@@ -25,6 +25,7 @@ import org.embeddedt.embeddium.impl.common.util.NativeBuffer;
 import org.embeddedt.embeddium.impl.gl.device.GLRenderDevice;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL30;
+import org.taumc.celeritas.impl.compat.betterfoliage.BetterFoliageCompat;
 import org.taumc.celeritas.impl.command.TogglePassCommand;
 import org.taumc.celeritas.impl.gui.SodiumGameOptions;
 import org.taumc.celeritas.impl.render.terrain.CeleritasWorldRenderer;
@@ -68,6 +69,10 @@ public class CeleritasVintage {
         // Embeddium: Show a lot less with reduced debug info
         if (Minecraft.getMinecraft().isReducedDebug()) {
             return;
+        }
+
+        if (Loader.isModLoaded("betterfoliage")) {
+            strings.add("Foliage compatibility: " + BetterFoliageCompat.getDebugStatus());
         }
 
         var renderer = CeleritasWorldRenderer.instanceNullable();

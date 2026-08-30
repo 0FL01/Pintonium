@@ -13,10 +13,12 @@ public class WorldRenderingSettings {
 	private Object2IntFunction<NamespacedId> entityIds;
 	private Object2IntFunction<NamespacedId> itemIds;
 	private float ambientOcclusionLevel;
-	private boolean disableDirectionalShading;
+	// These values are written by the render thread and consumed while chunk
+	// geometry is built on worker threads.
+	private volatile boolean disableDirectionalShading;
 	private boolean hasVillagerConversionId;
-	private boolean useSeparateAo;
-	private boolean useExtendedVertexFormat;
+	private volatile boolean useSeparateAo;
+	private volatile boolean useExtendedVertexFormat;
 	private boolean separateEntityDraws;
 	private boolean voxelizeLightBlocks;
 

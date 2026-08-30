@@ -229,7 +229,6 @@ public class IrisGenericRenderProgram implements IDhApiGenericObjectShaderProgra
 		GL32C.glUseProgram(id);
 		Matrix4f modelView = toJOML(renderParam.dhModelViewMatrix);
 		Matrix4f projection = toJOML(renderParam.dhProjectionMatrix);
-		DHCompat.setProjection(projection);
 		if (blend != null) blend.apply();
 
 		for (BufferBlendOverride override : bufferBlendOverrides) {

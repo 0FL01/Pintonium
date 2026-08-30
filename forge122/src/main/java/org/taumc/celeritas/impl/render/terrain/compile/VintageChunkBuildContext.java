@@ -4,6 +4,7 @@ package org.taumc.celeritas.impl.render.terrain.compile;
 //?}
 import lombok.Getter;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings;
 import net.irisshaders.iris.shaderpack.materialmap.VintageWorldRenderingSettings;
 import net.minecraft.block.BlockBush;
 import net.minecraft.block.BlockCrops;
@@ -25,6 +26,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
+import org.embeddedt.embeddium.api.util.ColorABGR;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
 import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
@@ -204,6 +206,9 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             int trueNormal = QuadUtil.calculateNormal(quad);
             for (int v = 0; v < 4; v++) {
                 var vertex = quad[v];
+                if (WorldRenderingSettings.INSTANCE.shouldUseSeparateAo()) {
+                    vertex.color = separateAmbientOcclusion(vertex.color);
+                }
                 vertex.vanillaNormal = trueNormal;
                 vertex.trueNormal = trueNormal;
             }
@@ -232,6 +237,30 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             buffers.get(correctMaterial).getVertexBuffer(facing).push(quad, correctMaterial);
         }
         ChunkVertexExtendedData.clear();
+    }
+
+    /**
+     * Minecraft 1.12's block renderer bakes AO into all three vertex color
+     * channels. Shaderpacks using separateAo expect that scalar brightness in
+     * alpha instead, leaving RGB as the block/biome tint. Factoring by the
+     * brightest channel preserves the original RGB * AO result while exposing
+     * the brightness separately to the shaderpack.
+     */
+    private static int separateAmbientOcclusion(int color) {
+        int red = ColorABGR.unpackRed(color);
+        int green = ColorABGR.unpackGreen(color);
+        int blue = ColorABGR.unpackBlue(color);
+        int brightness = Math.max(red, Math.max(green, blue));
+
+        if (brightness <= 0) {
+            return color;
+        }
+
+        int separatedRed = Math.min(255, Math.round(red * 255.0F / brightness));
+        int separatedGreen = Math.min(255, Math.round(green * 255.0F / brightness));
+        int separatedBlue = Math.min(255, Math.round(blue * 255.0F / brightness));
+
+        return ColorABGR.pack(separatedRed, separatedGreen, separatedBlue, brightness);
     }
 
     private static QuadMetadata findMetadata(ArrayList<QuadMetadata> metadata, int quad, int startIndex) {
