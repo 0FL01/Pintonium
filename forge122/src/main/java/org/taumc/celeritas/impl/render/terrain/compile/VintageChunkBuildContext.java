@@ -26,6 +26,7 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
+import net.minecraftforge.fluids.IFluidBlock;
 import org.embeddedt.embeddium.api.util.ColorABGR;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
@@ -115,7 +116,7 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
                 pos.getY() - this.offY,
                 pos.getZ() - this.offZ,
                 (byte) state.getLightValue(),
-                layer != BlockRenderLayer.SOLID && CeleritasLeafCullingCompat.isLeafLike(state)));
+                isFluid(state) || (layer != BlockRenderLayer.SOLID && CeleritasLeafCullingCompat.isLeafLike(state))));
     }
 
     public void convertVanillaDataToCeleritasData(ChunkBuildBuffers buffers) {
@@ -309,6 +310,12 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
             return -1;
         }
 
+        // A fluid's registry name/material does not imply water, lava or foliage.
+        // Explicit pack mappings were already considered by shaderBlockId.
+        if (isFluid(state)) {
+            return genericMaterialFallbackId();
+        }
+
         String path = registryName.getPath().toLowerCase(Locale.ROOT);
 
         if (isLeavesLike(state, block, path)) {
@@ -395,7 +402,11 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
     }
 
     private static short shaderRenderType(IBlockState state) {
-        return state.getMaterial().isLiquid() ? (short) 1 : (short) 0;
+        return isFluid(state) ? (short) 1 : (short) 0;
+    }
+
+    private static boolean isFluid(IBlockState state) {
+        return state.getBlock() instanceof IFluidBlock || state.getMaterial().isLiquid();
     }
 
     private record QuadMetadata(int startQuad, int endQuad, int blockId, short renderType,
