@@ -29,6 +29,15 @@ Evidence is local jar/bytecode inspection, not runtime registry or visual covera
 
 ## Verification and next iteration
 
+User reports BuildCraft oil appearance unchanged after iteration 1. This iteration
+preserves classification/layers; it does not assign a reflective oil material.
+The inspected Complementary configuration had RP_MODE=0 and
+BLOCK_REFLECT_QUALITY=1; opaque PBR reflections require RP_MODE>=1 and quality>=2.
+Complementary contains no dedicated oil material. Its obsidian material preserves
+albedo but is not an oil substitute. Accurate reflectivity requires pack material
+support or PBR texture maps and a verified normal/specular atlas path. No global
+water/obsidian mapping or pack-option change was applied to conceal this gap.
+
 Build: `bash ./gradlew -Ptarget_versions=1.12.2 packageJar --offline --console=plain`.
 Client: verify a world oil pool (top/side/flow), translucent non-emissive liquid,
 molten/emissive liquid and upward/gaseous liquid, then vanilla water/lava as controls.

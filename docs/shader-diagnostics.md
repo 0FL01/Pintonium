@@ -1,5 +1,15 @@
 # Shader diagnostics on 1.12.2
 
+## Hand depth and water reflections
+
+With shaderpacks, the vanilla depth-only clear immediately before renderHand is
+suppressed; the initial full-frame clear is unchanged. Hand projection is
+pre-scaled by IrisConstants.DEPTH, matching the published MC_HAND_DEPTH macro.
+Without shaderpacks both hooks preserve vanilla behavior. The previous path
+cleared scene depth before composites and did not implement the advertised hand
+depth convention. Verify hand motion against water reflections and near walls;
+compilation/remap checks do not establish absence of visual flicker.
+
 This diagnostic build does not change shader rendering rules and is not specific
 to a shaderpack. Use the same scene and pack settings when comparing builds.
 

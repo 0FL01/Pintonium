@@ -1,5 +1,7 @@
 package org.taumc.celeritas.mixin.shaders;
 
+import com.llamalad7.mixinextras.injector.WrapWithCondition;
+import net.irisshaders.iris.IrisConstants;
 import net.irisshaders.iris.compat.dh.DHCompat;
 import net.irisshaders.iris.IrisCommon;
 import net.irisshaders.iris.IrisVintage;
@@ -13,6 +15,7 @@ import net.irisshaders.iris.uniforms.IrisTimeUniforms;
 import net.irisshaders.iris.uniforms.SystemTimeUniforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -145,6 +148,23 @@ public class MixinEntityRenderer_Shaders {
                     this.iris$gbufferMatrices.restore();
                 }
             }
+        }
+    }
+
+    @WrapWithCondition(method = "renderWorldPass(IFJ)V", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/GlStateManager;clear(I)V", ordinal = 1))
+    private boolean iris$preserveWorldDepthBeforeHand(int mask) {
+        // The second clear is vanilla's hand-only depth reset. Shader composites
+        // still need scene depth; the first full-frame clear remains untouched.
+        return this.iris$getVintagePipeline() == null;
+    }
+
+    @Inject(method = "renderHand(FI)V", at = @At(value = "INVOKE",
+            target = "Lorg/lwjgl/util/glu/Project;gluPerspective(FFFF)V", remap = false))
+    private void iris$compressHandDepth(float partialTicks, int pass, CallbackInfo ci) {
+        if (this.iris$getVintagePipeline() != null) {
+            // Pre-multiply projection, not modelview: this must match MC_HAND_DEPTH.
+            GlStateManager.scale(1.0F, 1.0F, IrisConstants.DEPTH);
         }
     }
 
