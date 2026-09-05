@@ -538,15 +538,21 @@ public class MinecraftVintageVersionShimImpl implements MinecraftVersionShimServ
 
     @Override
     public Matrix4f getShadowModelView(float sunPathRotation, float intervalSize) {
-        // 1.12 does not render Iris shadow maps yet. Identity matrices make
-        // shaderpacks project world coordinates into shadow space anyway,
-        // causing directional darkness even with fallback white shadow maps.
-        // Keep this invertible so shadowModelViewInverse does not become NaN.
+        var pipeline = net.irisshaders.iris.IrisCommon.getPipelineManager().getPipelineNullable();
+        if (pipeline instanceof net.irisshaders.iris.pipeline.VintageIrisRenderingPipeline
+                && pipeline.shouldDisableVanillaEntityShadows()) {
+            return net.irisshaders.iris.shadows.VintageShadowRenderer.createModelView(sunPathRotation, intervalSize);
+        }
         return new Matrix4f().scaling(DISABLED_SHADOW_SPACE_SCALE);
     }
 
     @Override
     public Matrix4f getShadowProjection(float shadowDistance, float nearPlane, float farPlane) {
+        var pipeline = net.irisshaders.iris.IrisCommon.getPipelineManager().getPipelineNullable();
+        if (pipeline instanceof net.irisshaders.iris.pipeline.VintageIrisRenderingPipeline) {
+            Matrix4f projection = ((net.irisshaders.iris.pipeline.VintageIrisRenderingPipeline) pipeline).getVintageShadowProjection();
+            if (projection != null) return projection;
+        }
         return new Matrix4f().scaling(DISABLED_SHADOW_SPACE_SCALE);
     }
 

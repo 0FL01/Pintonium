@@ -29,8 +29,9 @@ uniform vec3 u_RegionOffset;
 
 #ifndef CELERITAS_NO_LIGHTMAP
 uniform sampler2D u_LightTex; // The light map texture sampler
+uniform vec4 u_HeldItemLight; // Camera-relative position and block-light level (zero disables).
 
-vec4 _sample_lightmap(sampler2D lightMap, ivec2 uv) {
+vec4 _sample_lightmap(sampler2D lightMap, vec2 uv) {
     return texture(lightMap, clamp(uv / 256.0, vec2(0.5 / 16.0), vec2(15.5 / 16.0)));
 }
 #endif
@@ -56,7 +57,10 @@ void main() {
 #ifdef CELERITAS_NO_LIGHTMAP
     vs_out.v_Color = _vert_color;
 #else
-    vs_out.v_Color = _vert_color * _sample_lightmap(u_LightTex, _vert_tex_light_coord);
+    vec2 lightCoord = vec2(_vert_tex_light_coord);
+    float heldLight = max(0.0, u_HeldItemLight.w - length(position - u_HeldItemLight.xyz));
+    lightCoord.x = max(lightCoord.x, heldLight * 16.0);
+    vs_out.v_Color = _vert_color * _sample_lightmap(u_LightTex, lightCoord);
 #endif
     vs_out.v_TexCoord = _vert_tex_diffuse_coord;
 

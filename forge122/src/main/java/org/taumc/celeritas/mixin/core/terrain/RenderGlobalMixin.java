@@ -150,7 +150,11 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
     private void celeritas$bindMainFramebufferForVanillaTerrain() {
         WorldRenderingPipeline pipeline = IrisCommon.getPipelineManager().getPipelineNullable();
         if (pipeline instanceof CommonIrisRenderingPipeline) {
-            ((CommonIrisRenderingPipeline) pipeline).bindDefault();
+            if (org.taumc.celeritas.impl.render.GlMatrixSnapshot.isRenderingShadowPass()) {
+                ((CommonIrisRenderingPipeline) pipeline).bindDefaultShadow();
+            } else {
+                ((CommonIrisRenderingPipeline) pipeline).bindDefault();
+            }
         } else {
             IrisVintage.resetVanillaGlState();
         }
@@ -645,4 +649,3 @@ public abstract class RenderGlobalMixin implements SimpleWorldRenderer.Provider<
         }
     }
 }
-

@@ -26,7 +26,8 @@ public class MixinRenderGlobal_Shaders {
     @Inject(method = "renderBlockLayer", at = @At("HEAD"))
     private void iris$beginTranslucentStage(BlockRenderLayer blockLayerIn, double partialTicks, int pass, Entity entityIn,
             CallbackInfoReturnable<Integer> cir) {
-        if (blockLayerIn != BlockRenderLayer.TRANSLUCENT) {
+        if (blockLayerIn != BlockRenderLayer.TRANSLUCENT
+                || org.taumc.celeritas.impl.render.GlMatrixSnapshot.isRenderingShadowPass()) {
             return;
         }
 

@@ -218,6 +218,7 @@ public class IrisVintage implements CeleritasShaderVersionService {
     public void onRenderSystemInit() {
         installVanillaStateResetter();
         ensureRenderSystemInitialized();
+        VintageShaderDiagnostics.configure();
         if (!MinecraftVersionShimService.MINECRAFT_SHIM.isDHPresent()) {
             IrisCommon.loadShaderpack();
         }
@@ -256,6 +257,11 @@ public class IrisVintage implements CeleritasShaderVersionService {
 
     @Override
     public WorldRenderingPipeline createPipeline(NamespacedId dimensionId) {
+        if (IrisCommon.getIrisConfig().areDebugOptionsEnabled()) {
+            IRIS_LOGGER.info("[Shader diagnostics] Creating pipeline: dimension={} pack={} enabled={} packLoaded={}",
+                    dimensionId, IrisCommon.getIrisConfig().getShaderPackName().orElse("none"),
+                    IrisCommon.getIrisConfig().areShadersEnabled(), IrisCommon.getCurrentPack().isPresent());
+        }
         if (IrisCommon.getCurrentPack().isEmpty() || !IrisCommon.getIrisConfig().areShadersEnabled()) {
             IrisCommon.setFallback(false);
             return createVanillaRenderingPipeline();
@@ -265,7 +271,13 @@ public class IrisVintage implements CeleritasShaderVersionService {
             ensureRenderSystemInitialized();
             ProgramSet programs = IrisCommon.getCurrentPack().get().getProgramSet(dimensionId);
             IrisCommon.setFallback(false);
-            return new VintageIrisRenderingPipeline(programs);
+            var pipeline = new VintageIrisRenderingPipeline(programs);
+            if (IrisCommon.getIrisConfig().areDebugOptionsEnabled()) {
+                var details = new java.util.ArrayList<String>();
+                pipeline.addDebugText(details);
+                IRIS_LOGGER.info("[Shader diagnostics] Pipeline ready: dimension={} details={}", dimensionId, details);
+            }
+            return pipeline;
         } catch (Exception e) {
             IRIS_LOGGER.error("Failed to create the 1.12 shader rendering pipeline, falling back to vanilla rendering!", e);
             IrisCommon.setFallback(true);
@@ -282,6 +294,7 @@ public class IrisVintage implements CeleritasShaderVersionService {
     public void reload() {
         try {
             IrisCommon.getIrisConfig().initialize();
+            VintageShaderDiagnostics.configure();
             IrisCommon.destroyEverything();
             IrisCommon.loadShaderpack();
 

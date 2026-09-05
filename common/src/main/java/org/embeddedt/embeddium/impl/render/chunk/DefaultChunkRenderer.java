@@ -56,6 +56,10 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
 
     protected abstract void configureShaderInterface(ChunkShaderInterface shader);
 
+    protected void configureShaderInterface(ChunkShaderInterface shader, CameraTransform camera) {
+        this.configureShaderInterface(shader);
+    }
+
     @Override
     public void render(ChunkRenderMatrices matrices,
                        CommandList commandList,
@@ -86,7 +90,7 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
             this.currentRenderPass = renderPass;
             this.currentVertexFormat = this.renderPassConfiguration.getVertexTypeForPass(this.currentRenderPass).getVertexFormat();
 
-            this.configureShaderInterface(shader);
+            this.configureShaderInterface(shader, camera);
 
             while (iterator.hasNext()) {
                 ChunkRenderList renderList = iterator.next();

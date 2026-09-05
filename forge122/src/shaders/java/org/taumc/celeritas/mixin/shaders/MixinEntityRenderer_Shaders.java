@@ -34,6 +34,9 @@ public class MixinEntityRenderer_Shaders {
     private boolean iris$handBridgeActive;
 
     @Unique
+    private boolean iris$weatherBridgeActive;
+
+    @Unique
     private GlMatrixSnapshot iris$gbufferMatrices;
 
     @Unique
@@ -130,11 +133,9 @@ public class MixinEntityRenderer_Shaders {
     @Inject(method = "renderWorldPass(IFJ)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/RenderGlobal;setupTerrain(Lnet/minecraft/entity/Entity;DLnet/minecraft/client/renderer/culling/ICamera;IZ)V", shift = At.Shift.AFTER))
     private void iris$runPreparePass(int pass, float partialTicks, long finishTimeNano, CallbackInfo ci) {
         if (pass == 2 && this.iris$pipeline != null) {
-            GlMatrixSnapshot.setRenderingShadowPass(true);
             try {
                 this.iris$pipeline.renderShadows(null, null);
             } finally {
-                GlMatrixSnapshot.setRenderingShadowPass(false);
                 this.iris$bindDefaultFramebuffer();
                 if (this.iris$gbufferMatrices != null) {
                     // DH 3.2 captures the legacy GL matrices at SOLID terrain HEAD for
@@ -144,6 +145,23 @@ public class MixinEntityRenderer_Shaders {
                     this.iris$gbufferMatrices.restore();
                 }
             }
+        }
+    }
+
+    @Inject(method = "renderRainSnow(F)V", at = @At("HEAD"))
+    private void iris$beginWeather(float partialTicks, CallbackInfo ci) {
+        VintageIrisRenderingPipeline pipeline = this.iris$getVintagePipeline();
+        this.iris$weatherBridgeActive = pipeline != null && pipeline.beginVintageWeatherRendering();
+    }
+
+    @Inject(method = "renderRainSnow(F)V", at = @At("RETURN"))
+    private void iris$endWeather(float partialTicks, CallbackInfo ci) {
+        if (this.iris$weatherBridgeActive) {
+            VintageIrisRenderingPipeline pipeline = this.iris$getVintagePipeline();
+            if (pipeline != null) {
+                pipeline.endVintageWeatherRendering();
+            }
+            this.iris$weatherBridgeActive = false;
         }
     }
 

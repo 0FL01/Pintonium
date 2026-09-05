@@ -28,6 +28,7 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3i;
 import org.taumc.celeritas.impl.compat.fluidlogged.FluidloggedCompat;
 import org.taumc.celeritas.impl.render.terrain.CeleritasWorldRenderer;
+import org.taumc.celeritas.impl.render.terrain.HeldItemLight;
 import org.taumc.celeritas.impl.world.biome.BiomeColorCache;
 import org.taumc.celeritas.impl.world.cloned.CeleritasBlockAccess;
 import org.taumc.celeritas.impl.world.cloned.ChunkRenderContext;
@@ -109,6 +110,7 @@ public class WorldSlice implements CeleritasBlockAccess {
 
     // The volume that this slice contains
     private StructureBoundingBox volume;
+    private HeldItemLight heldItemLight = HeldItemLight.NONE;
 
     // A fallback BlockPos object to use when retrieving data from the level directly
     private final BlockPos.MutableBlockPos fallbackPos = new BlockPos.MutableBlockPos();
@@ -161,7 +163,9 @@ public class WorldSlice implements CeleritasBlockAccess {
             }
         }
 
-        return new ChunkRenderContext(origin, sections, volume);
+        var renderer = CeleritasWorldRenderer.instanceNullable();
+        return new ChunkRenderContext(origin, sections, volume,
+                renderer == null ? HeldItemLight.NONE : renderer.getTerrainHeldItemLight(world));
     }
 
     private boolean hasSkyLight() {
@@ -204,6 +208,7 @@ public class WorldSlice implements CeleritasBlockAccess {
         this.origin = context.getOrigin();
         this.sections = context.getSections();
         this.volume = context.getVolume();
+        this.heldItemLight = context.getHeldItemLight();
 
 
         this.biomeColorCache.update(context.getOrigin());
@@ -361,7 +366,8 @@ public class WorldSlice implements CeleritasBlockAccess {
     @Override
     public int getCombinedLight(BlockPos pos, int ambientLight) {
         if (!blockBoxContains(this.volume, pos.getX(), pos.getY(), pos.getZ())) {
-            return (this.defaultSkyLightValue << 20) | (ambientLight << 4);
+            return this.heldItemLight.apply(pos.getX(), pos.getY(), pos.getZ(),
+                    (this.defaultSkyLightValue << 20) | (ambientLight << 4));
         }
 
         int i = this.getLightFromNeighborsFor(EnumSkyBlock.SKY, pos);
@@ -372,7 +378,7 @@ public class WorldSlice implements CeleritasBlockAccess {
             j = ambientLight;
         }
 
-        return i << 20 | j << 4;
+        return this.heldItemLight.apply(pos.getX(), pos.getY(), pos.getZ(), i << 20 | j << 4);
     }
 
     private int getLightFor(EnumSkyBlock type, int relX, int relY, int relZ) {
@@ -584,4 +590,3 @@ public class WorldSlice implements CeleritasBlockAccess {
         return z << TABLE_BITS | x;
     }
 }
-

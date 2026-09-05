@@ -11,8 +11,11 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.world.World;
 import net.minecraftforge.client.MinecraftForgeClient;
 import org.embeddedt.embeddium.impl.gl.device.CommandList;
+import org.embeddedt.embeddium.impl.render.ShaderModBridge;
 import org.embeddedt.embeddium.impl.render.chunk.ChunkRenderMatrices;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderFogComponent;
 import org.embeddedt.embeddium.impl.render.chunk.terrain.TerrainRenderPass;
@@ -30,6 +33,26 @@ import java.util.*;
  * Provides an extension to vanilla's {@link net.minecraft.client.renderer.RenderGlobal}.
  */
 public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, VintageRenderSectionManager, BlockRenderLayer, TileEntity, CeleritasWorldRenderer.TileEntityRenderContext>  {
+    private HeldItemLight heldItemLight = HeldItemLight.NONE;
+    private HeldItemLight terrainHeldItemLight = HeldItemLight.NONE;
+
+    public HeldItemLight getHeldItemLight(World world) {
+        return this.world == world ? this.heldItemLight : HeldItemLight.NONE;
+    }
+
+    public HeldItemLight getTerrainHeldItemLight(World world) {
+        return this.world == world ? this.terrainHeldItemLight : HeldItemLight.NONE;
+    }
+
+    @Override
+    public void setWorld(WorldClient world) {
+        if (this.world != world) {
+            this.heldItemLight = HeldItemLight.NONE;
+            this.terrainHeldItemLight = HeldItemLight.NONE;
+        }
+        super.setWorld(world);
+    }
+
     public record TileEntityRenderContext(Map<Integer, DestroyBlockProgress> damagedBlocks, float partialTicks, Runnable prepareRenderState) {}
 
     /**
@@ -44,6 +67,10 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
      */
     public static CeleritasWorldRenderer instanceNullable() {
         return SimpleWorldRenderer.Provider.getWorldRendererNullable(Minecraft.getMinecraft().renderGlobal);
+    }
+
+    public void setCurrentViewport(org.embeddedt.embeddium.impl.render.viewport.Viewport viewport) {
+        this.currentViewport = viewport;
     }
 
     @Override
@@ -92,6 +119,25 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
 
     @Override
     protected CameraState captureCameraState(float ticks) {
+        var player = Minecraft.getMinecraft().player;
+        int level = player == null || player.world != this.world || player.isDead || player.isSpectator() ? 0
+                : Math.max(HeldItemLight.lightValue(player.getHeldItemMainhand()),
+                        HeldItemLight.lightValue(player.getHeldItemOffhand()));
+        this.heldItemLight = level == 0 ? HeldItemLight.NONE : new HeldItemLight(
+                player.lastTickPosX + (player.posX - player.lastTickPosX) * ticks,
+                player.lastTickPosY + (player.posY - player.lastTickPosY) * ticks + player.getEyeHeight(),
+                player.lastTickPosZ + (player.posZ - player.lastTickPosZ) * ticks, level);
+        // Only shaderpacks need baked light. Native terrain follows the source every frame on the GPU.
+        HeldItemLight light = level == 0 || !ShaderModBridge.areShadersEnabled() ? HeldItemLight.NONE : new HeldItemLight(
+                MathHelper.floor(player.posX), MathHelper.floor(player.posY + player.getEyeHeight()),
+                MathHelper.floor(player.posZ), level);
+        if (!light.equals(this.terrainHeldItemLight)) {
+            HeldItemLight previous = this.terrainHeldItemLight;
+            this.terrainHeldItemLight = light;
+            previous.invalidate(this);
+            light.invalidate(this);
+        }
+
         Entity viewEntity = Objects.requireNonNull(Minecraft.getMinecraft().getRenderViewEntity(), "Client must have view entity");
 
         double x = viewEntity.lastTickPosX + (viewEntity.posX - viewEntity.lastTickPosX) * ticks;

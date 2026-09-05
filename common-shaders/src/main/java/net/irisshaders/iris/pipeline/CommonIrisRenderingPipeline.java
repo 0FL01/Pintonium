@@ -648,11 +648,21 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
         IrisSamplers.addCustomImages(samplerHolder, customImages);
 
         if (IrisSamplers.hasShadowSamplers(samplerHolder)) {
-            addWorldShadowSamplers(samplerHolder);
+            // Legacy caster programs are built inside createShadowRenderer, before
+            // shadowRenderer is assigned. Their targets already exist at this point.
+            if (isShadowPass && shadowRenderTargets != null) {
+                IrisSamplers.addShadowSamplers(samplerHolder, shadowRenderTargets, null, separateHardwareSamplers);
+            } else {
+                addWorldShadowSamplers(samplerHolder);
+            }
         }
 
         if (isShadowPass || IrisImages.hasShadowImages(images)) {
-            addWorldShadowImages(images);
+            if (isShadowPass && shadowRenderTargets != null) {
+                IrisImages.addShadowColorImages(images, shadowRenderTargets, null);
+            } else {
+                addWorldShadowImages(images);
+            }
         }
     }
 

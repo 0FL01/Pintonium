@@ -2,6 +2,7 @@ package org.embeddedt.embeddium.impl.render.chunk.shader;
 
 import org.embeddedt.embeddium.impl.gl.shader.ShaderBindingContext;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat3v;
+import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformFloat4v;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformInt;
 import org.embeddedt.embeddium.impl.gl.shader.uniform.GlUniformMatrix4f;
 import org.embeddedt.embeddium.impl.gl.tessellation.GlPrimitiveType;
@@ -22,6 +23,7 @@ public class DefaultChunkShaderInterface implements ChunkShaderInterface {
     private final GlUniformMatrix4f uniformModelViewMatrix;
     private final GlUniformMatrix4f uniformProjectionMatrix;
     private final GlUniformFloat3v uniformRegionOffset;
+    private final GlUniformFloat4v uniformHeldItemLight;
 
     // The additional shader components used by this program in order to setup the appropriate GL state
     private final List<? extends ChunkShaderComponent> components;
@@ -32,6 +34,8 @@ public class DefaultChunkShaderInterface implements ChunkShaderInterface {
         this.uniformModelViewMatrix = context.bindUniform("u_ModelViewMatrix", GlUniformMatrix4f::new);
         this.uniformProjectionMatrix = context.bindUniform("u_ProjectionMatrix", GlUniformMatrix4f::new);
         this.uniformRegionOffset = context.bindUniform("u_RegionOffset", GlUniformFloat3v::new);
+        this.uniformHeldItemLight = options.pass().hasNoLightmap() ? null
+                : context.bindUniform("u_HeldItemLight", GlUniformFloat4v::new);
 
         this.uniformTextures = new EnumMap<>(ChunkShaderTextureSlot.class);
         this.uniformTextures.put(ChunkShaderTextureSlot.BLOCK, context.bindUniform("u_BlockTex", GlUniformInt::new));
@@ -72,6 +76,12 @@ public class DefaultChunkShaderInterface implements ChunkShaderInterface {
 
     public void setRegionOffset(float x, float y, float z) {
         this.uniformRegionOffset.set(x, y, z);
+    }
+
+    public void setHeldItemLight(float x, float y, float z, float level) {
+        if (this.uniformHeldItemLight != null) {
+            this.uniformHeldItemLight.set(new float[] {x, y, z, level});
+        }
     }
 
     public void setTextureSlot(ChunkShaderTextureSlot slot, int val) {

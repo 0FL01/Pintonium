@@ -6,7 +6,7 @@ import xyz.wagyourtail.jvmdg.gradle.task.files.DowngradeFiles
 plugins {
     id("celeritas.platform-conventions")
     id("celeritas-unimined-plugin")
-    id("xyz.wagyourtail.unimined") version "1.3.15-SNAPSHOT"
+    id("xyz.wagyourtail.unimined") version "1.4.1"
     id("xyz.wagyourtail.jvmdowngrader") version "1.1.3"
 }
 
@@ -28,6 +28,16 @@ base.archivesName = "pintonium-forge-${project.name}"
 
 val modCompileOnly by configurations.creating
 configurations.compileOnly.get().extendsFrom(modCompileOnly)
+
+repositories {
+    // The 1.0.7 Maven artifact is unavailable; use the same upstream release.
+    ivy {
+        url = uri("https://github.com/GTNewHorizons/RetroFuturaBootstrap/releases/download/")
+        patternLayout { artifact("[revision]/[artifact]-[revision](-[classifier]).[ext]") }
+        metadataSources { artifact() }
+        content { includeModule("com.gtnewhorizons.retrofuturabootstrap", "RetroFuturaBootstrap") }
+    }
+}
 
 if (stonecutter.eval(minecraftVersion, "<=1.10.2")) {
     configurations {

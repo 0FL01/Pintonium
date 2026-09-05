@@ -22,6 +22,7 @@ import net.irisshaders.iris.shaderpack.properties.PackDirectives;
 import net.irisshaders.iris.shadows.CommonShadowRenderer;
 import net.irisshaders.iris.shadows.ShadowCompositeRenderer;
 import net.irisshaders.iris.shadows.ShadowRenderTargets;
+import net.irisshaders.iris.shadows.VintageShadowRenderer;
 import net.irisshaders.iris.targets.RenderTargetStateListener;
 import net.irisshaders.iris.uniforms.CommonUniforms;
 import net.irisshaders.iris.uniforms.custom.CustomUniforms;
@@ -133,6 +134,12 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private boolean vintageLineRenderingActive;
     private boolean vintageLineBridgeLogged;
 
+    private Program vintageWeatherProgram;
+    private GlFramebuffer vintageWeatherFramebuffer;
+    private BlendModeOverride vintageWeatherBlendOverride;
+    private List<BufferBlendOverride> vintageWeatherBufferBlendOverrides = Collections.emptyList();
+    private WorldRenderingPhase vintageWeatherPreviousPhase;
+
     public VintageIrisRenderingPipeline(ProgramSet programSet) {
         super(programSet);
         MINECRAFT_SHIM.populateBlockIds(this.pack);
@@ -144,6 +151,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.createVintageBeaconBeamProgram();
         this.createVintageHandCompatibilityProgram();
         this.createVintageLineProgram();
+        this.createVintageWeatherProgram();
         this.vintageEntityFallbackFramebuffer = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, new int[] {0});
     }
 
@@ -170,12 +178,14 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
 
     @Override
     public void addDebugText(List<String> messages) {
-        messages.add("[Iris] 1.12 shader pipeline: composite/final MVP");
+        messages.add("[Iris] 1.12 shader pipeline: terrain, casters and composite/final");
         messages.add("[Iris] Terrain shader overrides: Pintonium chunk renderer bridge enabled");
         messages.add("[Iris] Vanilla terrain face shading disabled: "
                 + WorldRenderingSettings.INSTANCE.shouldDisableDirectionalShading());
         if (this.shadowRenderer == null) {
-            messages.add("[Iris] Shadow Maps: not used by shader pack or not implemented on 1.12 yet");
+            messages.add("[Iris] Shadow Maps: disabled or not used by shader pack");
+        } else {
+            this.shadowRenderer.addDebugText(messages);
         }
     }
 
@@ -188,8 +198,25 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     protected @Nullable CommonShadowRenderer createShadowRenderer(CommonIrisRenderingPipeline pipeline, ProgramSource programSource,
             PackDirectives packDirectives, ShadowRenderTargets shadowRenderTargets, ShadowCompositeRenderer shadowCompositeRenderer,
             CustomUniforms customUniforms, boolean separateHardwareSamplers) {
-        // TODO: Port the 1.12 shadow terrain renderer after terrain program overrides exist.
-        return null;
+        return new VintageShadowRenderer(this, programSource, packDirectives, shadowRenderTargets,
+                shadowCompositeRenderer, separateHardwareSamplers);
+    }
+
+    public Program createVintageShadowProgram(ProgramSource source) {
+        ProgramBuilder builder = ProgramBuilder.begin(source.getName() + "_legacy_casters",
+                source.getSourceNullable(ShaderType.VERTEX), source.getSourceNullable(ShaderType.GEOMETRY),
+                source.getSourceNullable(ShaderType.FRAGMENT), IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
+        CommonUniforms.addCommonUniforms(builder, this.pack.getIdMap(), this.packDirectives, this.updateNotifier, FogMode.PER_VERTEX);
+        this.customUniforms.assignTo(builder);
+        this.addGbufferOrShadowSamplers(builder, builder, () -> this.flippedBeforeShadow, true, true, true, false);
+        Program program = builder.build();
+        this.customUniforms.mapholderToPass(builder, program);
+        return program;
+    }
+
+    public org.joml.Matrix4f getVintageShadowProjection() {
+        return this.shadowRenderer instanceof VintageShadowRenderer
+                ? ((VintageShadowRenderer) this.shadowRenderer).createProjection() : null;
     }
 
     private void createVintageEntityProgram() {
@@ -284,8 +311,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
 
         int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
         boolean pbrFresnelBlockLayout = this.celeritas$isPbrFresnelLayout(source, drawBuffers);
-        if (this.celeritas$isColorAndAuxBufferLayout(drawBuffers)
-                && this.celeritas$tryCreateVintageShaderPackBlockEntityProgram(source, drawBuffers)) {
+        if (this.celeritas$tryCreateVintageShaderPackBlockEntityProgram(source, drawBuffers)) {
             return;
         }
 
@@ -367,20 +393,24 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
             ProgramBuilder builder = ProgramBuilder.begin(
                     source.getName() + "_celeritas_particle_compat",
-                    this.celeritas$getLegacyCompatibilityVertexSource(),
-                    null,
-                    this.celeritas$getLegacyCompatibilityFragmentSource(drawBuffers, false, false, false, false, false),
+                    source.getSourceNullable(ShaderType.VERTEX),
+                    source.getSourceNullable(ShaderType.GEOMETRY),
+                    source.getSourceNullable(ShaderType.FRAGMENT),
                     IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
 
-            builder.addExternalSampler(IrisSamplers.ALBEDO_TEXTURE_UNIT, "tex", "texture", "gtexture");
-            builder.addExternalSampler(IrisSamplers.LIGHTMAP_TEXTURE_UNIT, "lightmap");
-            this.celeritas$addLegacyCompatibilityUniforms(builder);
+            CommonUniforms.addCommonUniforms(builder, this.pack.getIdMap(), this.packDirectives, this.updateNotifier, FogMode.PER_VERTEX);
+            this.customUniforms.assignTo(builder);
+            this.addGbufferOrShadowSamplers(builder, builder,
+                    () -> this.isBeforeTranslucent ? this.flippedAfterPrepare : this.flippedAfterTranslucent,
+                    false, true, true, false);
 
             this.vintageParticleCompatProgram = builder.build();
+            this.customUniforms.mapholderToPass(builder, this.vintageParticleCompatProgram);
             this.vintageParticleCompatFramebufferBeforeTranslucent = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, drawBuffers);
             this.vintageParticleCompatFramebufferAfterTranslucent = this.renderTargets.createGbufferFramebuffer(this.flippedAfterTranslucent, drawBuffers);
             this.vintageParticleCompatBlendOverride = source.getDirectives().getBlendModeOverride().orElse(ProgramId.Particles.getBlendModeOverride());
-            this.vintageParticleCompatBufferBlendOverrides = this.celeritas$createBufferBlendOverrides(source);
+            this.vintageParticleCompatBufferBlendOverrides = this.celeritas$createBufferBlendOverrides(source, drawBuffers);
+            IRIS_LOGGER.info("Using shader pack particle program {} with draw buffers {}", source.getName(), java.util.Arrays.toString(drawBuffers));
         } catch (RuntimeException e) {
             if (this.vintageParticleCompatProgram != null) {
                 this.vintageParticleCompatProgram.delete();
@@ -448,6 +478,9 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
 
         try {
             int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
+            if (this.celeritas$tryCreateVintageShaderPackHandProgram(source, drawBuffers)) {
+                return;
+            }
             if (usingHandWaterSource) {
                 ProgramSource waterSource = this.resolver.resolve(ProgramId.Water).orElse(null);
                 drawBuffers = this.celeritas$mergeDrawBuffers(drawBuffers, waterSource);
@@ -520,6 +553,92 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             this.vintageLineBufferBlendOverrides = Collections.emptyList();
             IRIS_LOGGER.warn("Failed to create the 1.12 selection outline shader bridge. Selection outlines will use the active vanilla render state.", e);
         }
+    }
+
+    private boolean celeritas$tryCreateVintageShaderPackHandProgram(ProgramSource source, int[] drawBuffers) {
+        try {
+            ProgramBuilder builder = ProgramBuilder.begin(
+                    source.getName() + "_celeritas_hand",
+                    source.getSourceNullable(ShaderType.VERTEX),
+                    source.getSourceNullable(ShaderType.GEOMETRY),
+                    source.getSourceNullable(ShaderType.FRAGMENT),
+                    IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
+            CommonUniforms.addCommonUniforms(builder, this.pack.getIdMap(), this.packDirectives, this.updateNotifier, FogMode.PER_VERTEX);
+            this.customUniforms.assignTo(builder);
+            this.addGbufferOrShadowSamplers(builder, builder,
+                    () -> this.isBeforeTranslucent ? this.flippedAfterPrepare : this.flippedAfterTranslucent,
+                    false, true, true, false);
+            this.vintageHandCompatProgram = builder.build();
+            this.customUniforms.mapholderToPass(builder, this.vintageHandCompatProgram);
+            this.vintageHandCompatFramebufferBeforeTranslucent = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, drawBuffers);
+            this.vintageHandCompatFramebufferAfterTranslucent = this.renderTargets.createGbufferFramebuffer(this.flippedAfterTranslucent, drawBuffers);
+            this.vintageHandCompatBlendOverride = source.getDirectives().getBlendModeOverride().orElse(ProgramId.HandWater.getBlendModeOverride());
+            this.vintageHandCompatBufferBlendOverrides = this.celeritas$createBufferBlendOverrides(source, drawBuffers);
+            IRIS_LOGGER.info("Using shader pack hand program {} with draw buffers {}", source.getName(), java.util.Arrays.toString(drawBuffers));
+            return true;
+        } catch (RuntimeException e) {
+            if (this.vintageHandCompatProgram != null) {
+                this.vintageHandCompatProgram.delete();
+                this.vintageHandCompatProgram = null;
+            }
+            IRIS_LOGGER.warn("Failed to create shader pack hand program; using the legacy compatibility bridge.", e);
+            return false;
+        }
+    }
+
+    private void createVintageWeatherProgram() {
+        ProgramSource source = this.resolver.resolve(ProgramId.Weather).orElse(null);
+        if (source == null || !source.isValid()) {
+            return;
+        }
+        try {
+            int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
+            ProgramBuilder builder = ProgramBuilder.begin(
+                    source.getName() + "_celeritas_weather",
+                    source.getSourceNullable(ShaderType.VERTEX),
+                    source.getSourceNullable(ShaderType.GEOMETRY),
+                    source.getSourceNullable(ShaderType.FRAGMENT),
+                    IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
+            CommonUniforms.addCommonUniforms(builder, this.pack.getIdMap(), this.packDirectives, this.updateNotifier, FogMode.PER_VERTEX);
+            this.customUniforms.assignTo(builder);
+            this.addGbufferOrShadowSamplers(builder, builder, () -> this.flippedAfterTranslucent,
+                    false, true, true, false);
+            this.vintageWeatherProgram = builder.build();
+            this.customUniforms.mapholderToPass(builder, this.vintageWeatherProgram);
+            this.vintageWeatherFramebuffer = this.renderTargets.createGbufferFramebuffer(this.flippedAfterTranslucent, drawBuffers);
+            this.vintageWeatherBlendOverride = source.getDirectives().getBlendModeOverride().orElse(ProgramId.Weather.getBlendModeOverride());
+            this.vintageWeatherBufferBlendOverrides = this.celeritas$createBufferBlendOverrides(source, drawBuffers);
+            IRIS_LOGGER.info("Using shader pack weather program {} with draw buffers {}", source.getName(), java.util.Arrays.toString(drawBuffers));
+        } catch (RuntimeException e) {
+            if (this.vintageWeatherProgram != null) {
+                this.vintageWeatherProgram.delete();
+                this.vintageWeatherProgram = null;
+            }
+            IRIS_LOGGER.warn("Failed to create the 1.12 weather shader bridge.", e);
+        }
+    }
+
+    public boolean beginVintageWeatherRendering() {
+        if (this.vintageWeatherProgram == null) {
+            return false;
+        }
+        this.vintageWeatherPreviousPhase = this.getPhase();
+        this.vintageWeatherFramebuffer.bind();
+        this.setPhase(WorldRenderingPhase.RAIN_SNOW);
+        GbufferPrograms.runPhaseChangeNotifier();
+        this.celeritas$applyBlendOverrides(this.vintageWeatherBlendOverride, this.vintageWeatherBufferBlendOverrides);
+        this.vintageWeatherProgram.use();
+        this.customUniforms.push(this.vintageWeatherProgram);
+        this.bindVintageEntityLightmap();
+        return true;
+    }
+
+    public void endVintageWeatherRendering() {
+        Program.unbind();
+        this.celeritas$restoreBlendOverrides(this.vintageWeatherBlendOverride, this.vintageWeatherBufferBlendOverrides);
+        this.setPhase(this.vintageWeatherPreviousPhase);
+        GbufferPrograms.runPhaseChangeNotifier();
+        this.bindDefault();
     }
 
     private void celeritas$addLegacyCompatibilityUniforms(ProgramBuilder builder) {
@@ -943,6 +1062,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         GbufferPrograms.runPhaseChangeNotifier();
         this.celeritas$applyBlendOverrides(this.vintageParticleCompatBlendOverride, this.vintageParticleCompatBufferBlendOverrides);
         this.vintageParticleCompatProgram.use();
+        this.customUniforms.push(this.vintageParticleCompatProgram);
         this.bindVintageEntityLightmap();
         this.vintageParticleCompatRenderingActive = true;
         return true;
@@ -975,7 +1095,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         }
 
         if (!this.vintageHandCompatBridgeLogged) {
-            IRIS_LOGGER.info("Using the 1.12 legacy first-person hand compatibility shader bridge.");
+            IRIS_LOGGER.info("Using the 1.12 first-person hand shader bridge.");
             this.vintageHandCompatBridgeLogged = true;
         }
 
@@ -993,6 +1113,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         GL11.glDepthFunc(GL11.GL_LEQUAL);
         this.celeritas$applyBlendOverrides(this.vintageHandCompatBlendOverride, this.vintageHandCompatBufferBlendOverrides);
         this.vintageHandCompatProgram.use();
+        this.customUniforms.push(this.vintageHandCompatProgram);
         this.bindVintageEntityLightmap();
         this.vintageHandCompatRenderingActive = true;
         return true;
@@ -1062,6 +1183,10 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     }
 
     public boolean beginVintageBeaconBeamRendering() {
+        // Dragon crystal beams keep the caster program and shadow attachments.
+        if (CommonShadowRenderer.ACTIVE) {
+            return false;
+        }
         if (this.vintageBeaconBeamProgram == null) {
             return false;
         }
@@ -1144,6 +1269,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             if (framebuffer != null) {
                 framebuffer.bind();
                 this.vintageParticleCompatProgram.use();
+                this.customUniforms.push(this.vintageParticleCompatProgram);
                 this.bindVintageEntityLightmap();
                 return;
             }
@@ -1274,6 +1400,10 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             this.vintageLineProgram = null;
         }
 
+        if (this.vintageWeatherProgram != null) {
+            this.vintageWeatherProgram.delete();
+            this.vintageWeatherProgram = null;
+        }
         super.destroy();
     }
 }

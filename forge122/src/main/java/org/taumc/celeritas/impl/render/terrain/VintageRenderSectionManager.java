@@ -14,13 +14,16 @@ import org.embeddedt.embeddium.impl.render.chunk.compile.tasks.ChunkBuilderTask;
 import org.embeddedt.embeddium.impl.render.chunk.lists.SectionTicker;
 import org.embeddedt.embeddium.impl.render.chunk.occlusion.AsyncOcclusionMode;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderInterface;
+import org.embeddedt.embeddium.impl.render.chunk.shader.DefaultChunkShaderInterface;
 import org.embeddedt.embeddium.impl.render.chunk.shader.ChunkShaderTextureSlot;
 import org.embeddedt.embeddium.impl.render.chunk.sprite.GenericSectionSpriteTicker;
 import org.embeddedt.embeddium.impl.render.chunk.vertex.format.ChunkVertexType;
 import org.embeddedt.embeddium.impl.render.viewport.Viewport;
+import org.embeddedt.embeddium.impl.render.viewport.CameraTransform;
 import org.embeddedt.embeddium.impl.util.position.SectionPos;
 import org.jetbrains.annotations.Nullable;
 import org.taumc.celeritas.CeleritasVintage;
+import org.taumc.celeritas.impl.render.GlMatrixSnapshot;
 import org.taumc.celeritas.impl.render.terrain.compile.VintageChunkBuildContext;
 import org.taumc.celeritas.impl.render.terrain.compile.task.ChunkBuilderMeshingTask;
 import org.taumc.celeritas.impl.render.terrain.sprite.SpriteUtil;
@@ -34,7 +37,8 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     private final ClonedChunkSectionCache sectionCache;
 
     public VintageRenderSectionManager(RenderPassConfiguration<?> configuration, WorldClient world, int renderDistance, CommandList commandList, int minSection, int maxSection) {
-        super(configuration, () -> new VintageChunkBuildContext(world, configuration), ChunkRenderer::new, renderDistance, commandList, minSection, maxSection, CeleritasVintage.options().performance.chunkBuilderThreads);
+        // Capability, not current shader state: shaders may initialize or toggle after this manager.
+        super(configuration, () -> new VintageChunkBuildContext(world, configuration), ChunkRenderer::new, renderDistance, commandList, minSection, maxSection, CeleritasVintage.options().performance.chunkBuilderThreads, true);
         this.world = world;
         this.sectionCache = new ClonedChunkSectionCache(world);
     }
@@ -60,6 +64,9 @@ public class VintageRenderSectionManager extends RenderSectionManager {
 
     @Override
     protected boolean shouldUseOcclusionCulling(Viewport positionedViewport, boolean spectator) {
+        if (this.isInShadowPass()) {
+            return false;
+        }
         if (ShaderModBridge.areShadersEnabled() && this.world.provider != null && !this.world.provider.hasSkyLight()) {
             return false;
         }
@@ -108,6 +115,24 @@ public class VintageRenderSectionManager extends RenderSectionManager {
     }
 
     @Override
+    public boolean isInShadowPass() {
+        return GlMatrixSnapshot.isRenderingShadowPass();
+    }
+
+    public void updateShadowVisibility(Viewport viewport, int frame) {
+        var previousPosition = this.cameraPosition;
+        var previousBlockPosition = this.lastCameraPosition;
+        try {
+            this.finishAllGraphUpdates();
+            this.update(viewport, frame, false);
+            this.finishAllGraphUpdates();
+        } finally {
+            this.cameraPosition = previousPosition;
+            this.lastCameraPosition = previousBlockPosition;
+        }
+    }
+
+    @Override
     protected void scheduleSectionForRebuild(int x, int y, int z, boolean important) {
         this.sectionCache.invalidate(x, y, z);
         super.scheduleSectionForRebuild(x, y, z, important);
@@ -132,13 +157,28 @@ public class VintageRenderSectionManager extends RenderSectionManager {
 
         @Override
         public boolean useBlockFaceCulling(){
-            return CeleritasVintage.options().performance.useBlockFaceCulling;
+            return !GlMatrixSnapshot.isRenderingShadowPass()
+                    && CeleritasVintage.options().performance.useBlockFaceCulling;
         }
 
         @Override
         protected void configureShaderInterface(ChunkShaderInterface shader) {
             shader.setTextureSlot(ChunkShaderTextureSlot.BLOCK, 0);
             shader.setTextureSlot(ChunkShaderTextureSlot.LIGHT, 1);
+        }
+
+        @Override
+        protected void configureShaderInterface(ChunkShaderInterface shader, CameraTransform camera) {
+            this.configureShaderInterface(shader);
+            if (shader instanceof DefaultChunkShaderInterface nativeShader) {
+                var renderer = CeleritasWorldRenderer.instanceNullable();
+                var light = renderer == null || ShaderModBridge.areShadersEnabled() ? HeldItemLight.NONE
+                        : renderer.getHeldItemLight(Minecraft.getMinecraft().world);
+                // Match the rounded camera origin used for region offsets, subtracting before the float cast.
+                nativeShader.setHeldItemLight((float) (light.x() - camera.intX) - camera.fracX,
+                        (float) (light.y() - camera.intY) - camera.fracY,
+                        (float) (light.z() - camera.intZ) - camera.fracZ, light.level());
+            }
         }
     }
 }
