@@ -1,5 +1,17 @@
 # Shader diagnostics on 1.12.2
 
+## Legacy blend-cache coherence
+
+The forge122 GL service previously changed blend enable/factors directly without
+updating Minecraft's GlStateManager cache. Shader override/restore followed by a
+vanilla cached blend call could leave the driver in the wrong mode. Its three
+blend setters now update the Minecraft cache and explicitly apply driver state;
+the explicit call remains necessary after indexed blending or glPopAttrib.
+Player diagnostics also record the actual four blend factors. The recorded
+19:05:30 skin/layer HDR values were elevated before composites, but do not alone
+prove blending caused the complete visual symptom. Retest the same player views;
+no exposure, emissive coefficient or shaderpack brightness setting was changed.
+
 ## Scene-dependent player overexposure: capture
 
 Glint isolation did not resolve the user's remaining white/pink player symptom.

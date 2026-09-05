@@ -73,9 +73,14 @@ public class MixinPlayerLightDiagnostics {
         int buffer = GL11.glGetInteger(GL20.GL_DRAW_BUFFER0);
         int[] viewport = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
-        IRIS_LOGGER.info("[Player light] sample={} stage={} program={} fbo={} buffer={} lightmap={},{} blend={} depthMask={} entityId={} heldLight={},{}",
+        IRIS_LOGGER.info("[Player light] sample={} stage={} program={} fbo={} buffer={} lightmap={},{} blend={} blendFunc={},{},{},{} depthMask={} entityId={} heldLight={},{}",
                 iris$captures, stage, program, draw, buffer, OpenGlHelper.lastBrightnessX, OpenGlHelper.lastBrightnessY,
-                GL11.glIsEnabled(GL11.GL_BLEND), GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
+                GL11.glIsEnabled(GL11.GL_BLEND),
+                GL11.glGetInteger(org.lwjgl.opengl.GL14.GL_BLEND_SRC_RGB),
+                GL11.glGetInteger(org.lwjgl.opengl.GL14.GL_BLEND_DST_RGB),
+                GL11.glGetInteger(org.lwjgl.opengl.GL14.GL_BLEND_SRC_ALPHA),
+                GL11.glGetInteger(org.lwjgl.opengl.GL14.GL_BLEND_DST_ALPHA),
+                GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK),
                 iris$uniformInt(program, "entityId"), iris$uniformInt(program, "heldBlockLightValue"), iris$uniformInt(program, "heldBlockLightValue2"));
         if (draw == 0 || buffer == GL11.GL_NONE || viewport[2] <= 0 || viewport[3] <= 0
                 || GL11.glGetInteger(org.lwjgl.opengl.GL13.GL_SAMPLES) != 0

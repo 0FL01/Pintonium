@@ -3,6 +3,7 @@ package org.embeddedt.embeddium.impl.gl;
 import com.mitchej123.glsm.GLStateManagerService;
 import net.irisshaders.iris.gl.blending.BlendMode;
 import net.irisshaders.iris.gl.blending.ColorMask;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
@@ -144,16 +145,21 @@ public class GLStateManagerImpl implements GLStateManagerService {
 
     @Override
     public void enableBlend() {
+        // Update the vanilla cache as well as the driver. Indexed shader blend
+        // overrides and attribute restores can change GL without that cache.
+        GlStateManager.enableBlend();
         GL11.glEnable(GL11.GL_BLEND);
     }
 
     @Override
     public void disableBlend() {
+        GlStateManager.disableBlend();
         GL11.glDisable(GL11.GL_BLEND);
     }
 
     @Override
     public void glBlendFuncSeparate(int srcRGB, int dstRGB, int srcAlpha, int dstAlpha) {
+        GlStateManager.tryBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
         OpenGlHelper.glBlendFunc(srcRGB, dstRGB, srcAlpha, dstAlpha);
     }
 
