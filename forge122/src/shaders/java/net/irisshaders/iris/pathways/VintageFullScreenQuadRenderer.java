@@ -12,6 +12,17 @@ import java.nio.FloatBuffer;
 
 public class VintageFullScreenQuadRenderer implements FullScreenQuadRenderer {
     private static final int STRIDE = 5 * Float.BYTES;
+    private static final float[] VERTICES = {
+            // Compatibility quad: some packs scale it to a subrectangle in their vertex shader.
+            0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
+            1.0F, 0.0F, 0.0F, 1.0F, 0.0F,
+            0.0F, 1.0F, 0.0F, 0.0F, 1.0F,
+            1.0F, 1.0F, 0.0F, 1.0F, 1.0F,
+            // One oversized triangle: clipping preserves screen coverage and affine UVs.
+            0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
+            2.0F, 0.0F, 0.0F, 2.0F, 0.0F,
+            0.0F, 2.0F, 0.0F, 0.0F, 2.0F
+    };
     private static int vao;
     private static int vbo;
 
@@ -21,6 +32,7 @@ public class VintageFullScreenQuadRenderer implements FullScreenQuadRenderer {
     private boolean alphaTestEnabled;
     private Object diagnosticPack;
     private int diagnosticDraws;
+    private boolean fullscreenTriangle;
 
     @Override
     public void render() {
@@ -32,6 +44,10 @@ public class VintageFullScreenQuadRenderer implements FullScreenQuadRenderer {
     @Override
     public void begin() {
         ensureBuffers();
+        // Audited full-viewport affine vertex programs. Keep the quad for other packs,
+        // notably Chocapic's vertex-scaled bloom/cloud/render-scale rectangles.
+        this.fullscreenTriangle = "ComplementaryUnbound_r5.9.zip".equals(
+                IrisCommon.getIrisConfig().getShaderPackName().orElse(null));
 
         this.depthTestEnabled = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
         this.cullFaceEnabled = GL11.glIsEnabled(GL11.GL_CULL_FACE);
@@ -46,11 +62,6 @@ public class VintageFullScreenQuadRenderer implements FullScreenQuadRenderer {
         GL11.glDisable(GL11.GL_ALPHA_TEST);
 
         GL30.glBindVertexArray(vao);
-        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
-        GL20.glEnableVertexAttribArray(0);
-        GL20.glEnableVertexAttribArray(1);
-        GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, STRIDE, 0L);
-        GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, STRIDE, 3L * Float.BYTES);
     }
 
     @Override
@@ -67,7 +78,11 @@ public class VintageFullScreenQuadRenderer implements FullScreenQuadRenderer {
         if (trace) {
             traceFramebuffer("before");
         }
-        GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+        if (this.fullscreenTriangle) {
+            GL11.glDrawArrays(GL11.GL_TRIANGLES, 4, 3);
+        } else {
+            GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
+        }
         if (trace) {
             traceFramebuffer("after");
         }
@@ -132,8 +147,6 @@ public class VintageFullScreenQuadRenderer implements FullScreenQuadRenderer {
 
     @Override
     public void end() {
-        GL20.glDisableVertexAttribArray(1);
-        GL20.glDisableVertexAttribArray(0);
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         GL30.glBindVertexArray(0);
 
@@ -162,15 +175,8 @@ public class VintageFullScreenQuadRenderer implements FullScreenQuadRenderer {
             return;
         }
 
-        float[] vertices = {
-                0.0F, 0.0F, 0.0F, 0.0F, 0.0F,
-                1.0F, 0.0F, 0.0F, 1.0F, 0.0F,
-                0.0F, 1.0F, 0.0F, 0.0F, 1.0F,
-                1.0F, 1.0F, 0.0F, 1.0F, 1.0F
-        };
-
-        FloatBuffer buffer = BufferUtils.createFloatBuffer(vertices.length);
-        buffer.put(vertices).flip();
+        FloatBuffer buffer = BufferUtils.createFloatBuffer(VERTICES.length);
+        buffer.put(VERTICES).flip();
 
         vao = GL30.glGenVertexArrays();
         vbo = GL15.glGenBuffers();
@@ -178,6 +184,11 @@ public class VintageFullScreenQuadRenderer implements FullScreenQuadRenderer {
         GL30.glBindVertexArray(vao);
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
         GL15.glBufferData(GL15.GL_ARRAY_BUFFER, buffer, GL15.GL_STATIC_DRAW);
+        // Attribute enables, formats and their buffer bindings belong to this private VAO.
+        GL20.glEnableVertexAttribArray(0);
+        GL20.glEnableVertexAttribArray(1);
+        GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, STRIDE, 0L);
+        GL20.glVertexAttribPointer(1, 2, GL11.GL_FLOAT, false, STRIDE, 3L * Float.BYTES);
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         GL30.glBindVertexArray(0);
     }
