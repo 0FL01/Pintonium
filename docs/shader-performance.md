@@ -1,5 +1,24 @@
 # Forge122 shader performance
 
+## Shadow snapshot allocation iteration
+
+`VintageShadowState` now borrows zeroed scratch buffers from LWJGL's existing
+thread-local MemoryStack instead of allocating direct native buffers every frame.
+This covers current color/color mask, fixed-function texture matrices and generic
+vertex attributes. Heap arrays/views and the other snapshot helpers are unchanged;
+this is not a zero-allocation shadow renderer.
+
+The render method owns the stack scope. Java resource-close order restores the
+snapshot first, then releases scratch memory, including exceptional exits. No GL
+queries, state restoration, shadow draws, filtering or texture notifications were
+removed. No settings or shader sources were changed in this iteration.
+
+Expected benefit is lower CPU/native allocation overhead, not lower GPU shading
+cost. The supplied follow-up screenshot shows 60 FPS / 16.6 ms and GPU 99%, with
+different time/lighting from the original baseline; it cannot establish a causal
+FPS gain. Package compilation is checked; actual frame-time improvement and
+mod-renderer compatibility still require client verification after a restart.
+
 ## Fullscreen triangle iteration
 
 User baseline: Complementary Unbound r5.9, 55 FPS / 18.1 ms, GPU 98%,

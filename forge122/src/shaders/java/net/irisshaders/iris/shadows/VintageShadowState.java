@@ -4,13 +4,13 @@ import net.irisshaders.iris.gl.blending.BlendModeOverride;
 import net.irisshaders.iris.gl.program.Program;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
-import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL33;
+import org.lwjgl.system.MemoryStack;
 import org.taumc.celeritas.impl.compat.distanthorizons.DhRenderStateSnapshot;
 import org.taumc.celeritas.impl.render.GlMatrixSnapshot;
 
@@ -49,8 +49,8 @@ final class VintageShadowState implements AutoCloseable {
     private final boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
     private final boolean rescaleNormal = GL11.glIsEnabled(GL12_RESCALE_NORMAL);
     private final boolean normalize = GL11.glIsEnabled(GL11.GL_NORMALIZE);
-    private final FloatBuffer color = BufferUtils.createFloatBuffer(16);
-    private final ByteBuffer colorMask = BufferUtils.createByteBuffer(16);
+    private final FloatBuffer color;
+    private final ByteBuffer colorMask;
     private final int shadeModel = GL11.glGetInteger(GL11.GL_SHADE_MODEL);
     private final boolean colorMaterial = GL11.glIsEnabled(GL11.GL_COLOR_MATERIAL);
     private final boolean[] lights = new boolean[8];
@@ -59,7 +59,9 @@ final class VintageShadowState implements AutoCloseable {
     private final float polygonUnits = GL11.glGetFloat(GL11.GL_POLYGON_OFFSET_UNITS);
     private static final int GL12_RESCALE_NORMAL = 0x803A;
 
-    VintageShadowState() {
+    VintageShadowState(MemoryStack stack) {
+        color = stack.callocFloat(16);
+        colorMask = stack.calloc(16);
         GL11.glGetFloat(GL11.GL_CURRENT_COLOR, color);
         GL11.glGetBoolean(GL11.GL_COLOR_WRITEMASK, colorMask);
         for (int i = 0; i < lights.length; i++) lights[i] = GL11.glIsEnabled(GL11.GL_LIGHT0 + i);
@@ -72,13 +74,13 @@ final class VintageShadowState implements AutoCloseable {
             samplers[i] = GL11.glGetInteger(GL33.GL_SAMPLER_BINDING);
             if (i < textureMatrices.length) {
                 textureEnabled[i] = GL11.glIsEnabled(GL11.GL_TEXTURE_2D);
-                textureMatrices[i] = BufferUtils.createFloatBuffer(16);
+                textureMatrices[i] = stack.callocFloat(16);
                 GL11.glGetFloat(GL11.GL_TEXTURE_MATRIX, textureMatrices[i]);
                 textureDepths[i] = GL11.glGetInteger(GL11.GL_TEXTURE_STACK_DEPTH);
             }
         }
         for (int i = 1; i < attributes.length; i++) {
-            attributes[i] = BufferUtils.createFloatBuffer(4);
+            attributes[i] = stack.callocFloat(4);
             GL20.glGetVertexAttribfv(i, GL20.GL_CURRENT_VERTEX_ATTRIB, attributes[i]);
         }
         GL13.glActiveTexture(activeTexture);

@@ -52,6 +52,7 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL20;
+import org.lwjgl.system.MemoryStack;
 import org.taumc.celeritas.impl.render.GlMatrixSnapshot;
 import org.taumc.celeritas.impl.render.terrain.CeleritasWorldRenderer;
 import org.taumc.celeritas.mixin.shaders.accessor.MixinRenderManagerShadowAccessor;
@@ -183,7 +184,8 @@ public final class VintageShadowRenderer extends CommonShadowRenderer {
         double oldTileY = TileEntityRendererDispatcher.staticPlayerY;
         double oldTileZ = TileEntityRendererDispatcher.staticPlayerZ;
         boolean oldEntityShadows = dispatcher.isRenderShadow();
-        try (VintageShadowState ignored = new VintageShadowState()) {
+        // Close the snapshot before releasing its scratch memory, including exceptional exits.
+        try (MemoryStack stack = MemoryStack.stackPush(); VintageShadowState ignored = new VintageShadowState(stack)) {
             ACTIVE = true;
             GlMatrixSnapshot.setRenderingShadowPass(true);
             renderDistance = renderDistanceMultiplier < 0 ? IrisVideoSettings.shadowDistance
