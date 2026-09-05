@@ -19,6 +19,7 @@ import org.embeddedt.embeddium.compat.mc.MCAbstractTexture;
 import org.embeddedt.embeddium.compat.mc.MCDumpable;
 import org.embeddedt.embeddium.compat.mc.MCResourceLocation;
 import org.jetbrains.annotations.NotNull;
+import org.lwjgl.opengl.GL13;
 
 public class PBRTextureManager {
 	public static final PBRTextureManager INSTANCE = new PBRTextureManager();
@@ -41,12 +42,12 @@ public class PBRTextureManager {
 	private final PBRTextureHolder defaultHolder = new PBRTextureHolder() {
 		@Override
 		public @NotNull MCAbstractTexture normalTexture() {
-			return (MCAbstractTexture)defaultNormalTexture;
+			return defaultNormalTexture;
 		}
 
 		@Override
 		public @NotNull MCAbstractTexture specularTexture() {
-			return (MCAbstractTexture)defaultSpecularTexture;
+			return defaultSpecularTexture;
 		}
 	};
 
@@ -81,8 +82,21 @@ public class PBRTextureManager {
 	}
 
 	public void init() {
+		if (defaultNormalTexture != null) {
+			return;
+		}
 		defaultNormalTexture = new NativeImageBackedSingleColorTexture(PBRType.NORMAL.getDefaultValue());
-		defaultSpecularTexture = new NativeImageBackedSingleColorTexture(PBRType.SPECULAR.getDefaultValue());
+		try {
+			defaultSpecularTexture = new NativeImageBackedSingleColorTexture(PBRType.SPECULAR.getDefaultValue());
+		} catch (RuntimeException | Error e) {
+			defaultNormalTexture.close();
+			defaultNormalTexture = null;
+			throw e;
+		}
+	}
+
+	public boolean isInitialized() {
+		return defaultNormalTexture != null && defaultSpecularTexture != null;
 	}
 
 	public PBRTextureHolder getHolder(int id) {
@@ -109,14 +123,17 @@ public class PBRTextureManager {
 			Class<? extends MCAbstractTexture> clazz = texture.getClass();
 			PBRTextureLoader loader = PBRTextureLoaderRegistry.INSTANCE.getLoader(clazz);
 			if (loader != null) {
+				int previousActiveTexture = GL_STATE_MANAGER.getActiveTexture();
 				int previousTextureBinding = GL_STATE_MANAGER.getActiveBoundTexture();
 				consumer.clear();
 				try {
 					loader.load(texture, MINECRAFT_SHIM.getResourceManager(), consumer);
 					return consumer.toHolder();
 				} catch (Exception e) {
-					IRIS_LOGGER.debug("Failed to load PBR textures for texture " + id, e);
+					closeHolder(consumer.toHolder());
+					IRIS_LOGGER.warn("Failed to load PBR textures for texture " + id, e);
 				} finally {
+					GL_STATE_MANAGER.glActiveTexture(GL13.GL_TEXTURE0 + previousActiveTexture);
 					GL_STATE_MANAGER.bindTexture(previousTextureBinding);
 				}
 			}
@@ -161,8 +178,14 @@ public class PBRTextureManager {
 
 	public void close() {
 		clear();
-		defaultNormalTexture.close();
-		defaultSpecularTexture.close();
+		if (defaultNormalTexture != null) {
+			defaultNormalTexture.close();
+			defaultNormalTexture = null;
+		}
+		if (defaultSpecularTexture != null) {
+			defaultSpecularTexture.close();
+			defaultSpecularTexture = null;
+		}
 	}
 
 	private void closeHolder(PBRTextureHolder holder) {
@@ -207,8 +230,8 @@ public class PBRTextureManager {
 		}
 
 		public void clear() {
-			normalTexture = (MCAbstractTexture)defaultNormalTexture;
-			specularTexture = (MCAbstractTexture)defaultSpecularTexture;
+			normalTexture = defaultNormalTexture;
+			specularTexture = defaultSpecularTexture;
 			changed = false;
 		}
 

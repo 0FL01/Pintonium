@@ -21,6 +21,7 @@ import net.irisshaders.iris.pipeline.WorldRenderingPhase;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
 import net.irisshaders.iris.samplers.IrisSamplers;
 import net.irisshaders.iris.shadows.ShadowRenderingState;
+import net.irisshaders.iris.texture.TextureTracker;
 import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import net.irisshaders.iris.uniforms.custom.CustomUniforms;
 import net.minecraft.client.Minecraft;
@@ -105,6 +106,7 @@ public class IrisChunkShaderInterface implements ChunkShaderInterface {
         }
 
         IrisRenderSystem.bindTextureToUnit(TextureType.TEXTURE_2D.getGlType(), IrisSamplers.ALBEDO_TEXTURE_UNIT, getBlockTextureId());
+        TextureTracker.INSTANCE.onSetShaderTexture(IrisSamplers.ALBEDO_TEXTURE_UNIT, getBlockTextureId());
         IrisRenderSystem.bindTextureToUnit(TextureType.TEXTURE_2D.getGlType(), IrisSamplers.LIGHTMAP_TEXTURE_UNIT, MINECRAFT_SHIM.getLightTextureId());
         GL_STATE_MANAGER.glActiveTexture(GL32C.GL_TEXTURE0 + IrisSamplers.LIGHTMAP_TEXTURE_UNIT);
 

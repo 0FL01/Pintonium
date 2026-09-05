@@ -40,7 +40,9 @@ public class NativeImage extends BufferedImage implements MCNativeImage {
 
         if (image.getType() != BufferedImage.TYPE_INT_ARGB) {
             BufferedImage converted = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
-            converted.getGraphics().drawImage(image, 0, 0, null);
+            // Material channels remain meaningful at alpha zero; do not alpha-composite them.
+            converted.setRGB(0, 0, image.getWidth(), image.getHeight(),
+                    image.getRGB(0, 0, image.getWidth(), image.getHeight(), null, 0, image.getWidth()), 0, image.getWidth());
             image = converted;
         }
 
@@ -59,12 +61,16 @@ public class NativeImage extends BufferedImage implements MCNativeImage {
 
     @Override
     public void setPixelRGBA(int x, int y, int color) {
-        setRGB(x, y, color);
+        setRGB(x, y, swapRedBlue(color));
     }
 
     @Override
     public int getPixelRGBA(int x, int y) {
-        return getRGB(x, y);
+        return swapRedBlue(getRGB(x, y));
+    }
+
+    private static int swapRedBlue(int color) {
+        return (color & 0xFF00FF00) | (color & 0xFF) << 16 | (color >>> 16 & 0xFF);
     }
 
     @Override

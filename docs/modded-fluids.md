@@ -1,4 +1,47 @@
-# Modded fluids: iteration 1 (world blocks)
+# Modded fluids: world blocks and PBR atlas
+
+## Iteration 2: generated labPBR materials
+
+Forge122 now supplies the existing PBR manager with a parallel normal/specular
+atlas, tracked and bound with the Minecraft block atlas. The loader matches
+registered Forge fluids' still/flow sprites against actually uploaded sprites.
+Unauthored mod-fluid sprites receive RGBA (240,10,0,0) specular data: high
+smoothness, dielectric F0, no added SSS or emission. This is a common synthetic
+surface preset, not a measured physical property of each fluid. Albedo, UVs,
+animation and render layers remain unchanged. Vanilla water/lava are excluded.
+
+Static resource-pack `_s` and `_n` maps take priority, copied as raw channels even
+at alpha zero. Other unauthored atlas regions remain neutral. Authored animated
+maps or incompatible frame-sheet dimensions warn and use fallback/neutral data;
+animated authored PBR is not implemented. Constant generated maps need no frame
+updates. Resource reload/restitch/deletion invalidates the owned PBR textures.
+Unit-zero tracking covers skins/armor/hands so the atlas material is not retained
+when their separate textures are bound.
+
+Complementary client settings now use RP_MODE=3 (labPBR) and
+BLOCK_REFLECT_QUALITY=2. This is a pack-wide mode change, not an oil-only option.
+Exposure/fog/shadows are unchanged. Shaders that do not consume labPBR specular
+maps will not gain reflections from this implementation.
+
+Limitations: only registered atlas still/flow sprites; no automatic discovery of
+stack-dependent textures/overlays or non-atlas tank textures. Shared sprites share
+material parameters. A fluid needs reflected surroundings/light to show highlights;
+the preset neither makes black oil white nor simulates waves or an oil film.
+Existing packed block light is preserved; luminosity is not guessed as PBR emission.
+
+Verification: package build and existing common shader tests; standalone regression
+for NativeImage channel order and PNG data at alpha zero:
+
+```
+java -Djava.awt.headless=true --class-path build/libs/2.4.1-dev/pintonium-forge-1.12.2-2.4.1-dev.jar forge122/src/test/java/org/embeddedt/embeddium/compat/mc/NativeImageMaterialChannelsTest.java
+```
+
+Client verification remains required. Inspect `[Fluid PBR]` for generated sprites
+and authored counts, compare world oil at grazing angles, then reload resources
+and inspect hands/armor and ordinary blocks for material leakage. Also check a
+translucent and emissive fluid. Full tank/TESR material attribution remains pending.
+
+## Iteration 1: classification and layers
 
 The world-meshing path recognizes Forge `IFluidBlock` in addition to liquid
 materials. `VintageChunkBuildContext` preserves the original render layer for
@@ -27,16 +70,16 @@ water-style reflections/refraction or a new fluid simulation/renderer.
 
 Evidence is local jar/bytecode inspection, not runtime registry or visual coverage.
 
-## Verification and next iteration
+## Iteration 1 result and continuing scope
 
-User reports BuildCraft oil appearance unchanged after iteration 1. This iteration
+User reported BuildCraft oil appearance unchanged after iteration 1. That iteration
 preserves classification/layers; it does not assign a reflective oil material.
 The inspected Complementary configuration had RP_MODE=0 and
 BLOCK_REFLECT_QUALITY=1; opaque PBR reflections require RP_MODE>=1 and quality>=2.
 Complementary contains no dedicated oil material. Its obsidian material preserves
 albedo but is not an oil substitute. Accurate reflectivity requires pack material
-support or PBR texture maps and a verified normal/specular atlas path. No global
-water/obsidian mapping or pack-option change was applied to conceal this gap.
+support or PBR texture maps. Iteration 2 above implements the atlas path; it does
+not introduce a global water/obsidian material-ID mapping.
 
 Build: `bash ./gradlew -Ptarget_versions=1.12.2 packageJar --offline --console=plain`.
 Client: verify a world oil pool (top/side/flow), translucent non-emissive liquid,

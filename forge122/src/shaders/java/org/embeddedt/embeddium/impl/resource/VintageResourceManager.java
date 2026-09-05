@@ -17,6 +17,10 @@ public class VintageResourceManager implements MCResourceManager, MCResourceProv
         this.resourceManager = resourceManager;
     }
 
+    public IResourceManager unwrap() {
+        return this.resourceManager;
+    }
+
     @Override
     public Optional<MCResource> getResource(MCResourceLocation location) {
         try {

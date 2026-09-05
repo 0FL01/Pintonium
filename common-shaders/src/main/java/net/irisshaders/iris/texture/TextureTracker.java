@@ -9,6 +9,9 @@ import net.irisshaders.iris.gl.texture.TextureType;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
 import org.embeddedt.embeddium.compat.mc.MCAbstractTexture;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.opengl.GL13;
+
+import static com.mitchej123.glsm.GLStateManagerService.GL_STATE_MANAGER;
 
 public class TextureTracker {
 	public static final TextureTracker INSTANCE = new TextureTracker();
@@ -40,21 +43,35 @@ public class TextureTracker {
 			return;
 		}
 		if (unit == 0) {
+			int activeTexture = GL_STATE_MANAGER.getActiveTexture();
 			lockBindCallback = true;
-			if (bindTextureListener != null) {
-				bindTextureListener.run();
+			try {
+				if (bindTextureListener != null) {
+					bindTextureListener.run();
+				}
+				WorldRenderingPipeline pipeline = IrisCommon.getPipelineManager().getPipelineNullable();
+				if (pipeline != null) {
+					pipeline.onSetShaderTexture(id);
+				}
+			} finally {
+				try {
+					IrisRenderSystem.bindTextureToUnit(TextureType.TEXTURE_2D.getGlType(), 0, id);
+				} finally {
+					try {
+						GL_STATE_MANAGER.glActiveTexture(GL13.GL_TEXTURE0 + activeTexture);
+					} finally {
+						lockBindCallback = false;
+					}
+				}
 			}
-			WorldRenderingPipeline pipeline = IrisCommon.getPipelineManager().getPipelineNullable();
-			if (pipeline != null) {
-				pipeline.onSetShaderTexture(id);
-			}
-			// Reset texture state
-			IrisRenderSystem.bindTextureToUnit(TextureType.TEXTURE_2D.getGlType(), 0, id);
-			lockBindCallback = false;
 		}
 	}
 
 	public void onDeleteTexture(int id) {
 		textures.remove(id);
+	}
+
+	public void clear() {
+		textures.clear();
 	}
 }

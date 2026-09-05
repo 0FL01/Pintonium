@@ -11,6 +11,10 @@ public class VintageAbstractTexture implements MCAbstractTexture {
         this.texture = texture;
     }
 
+    public ITextureObject unwrap() {
+        return this.texture;
+    }
+
     @Override
     public int getId() {
         return this.texture.getGlTextureId();

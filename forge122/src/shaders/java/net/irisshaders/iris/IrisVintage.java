@@ -14,6 +14,7 @@ import net.irisshaders.iris.shaderpack.DimensionId;
 import net.irisshaders.iris.shaderpack.materialmap.BlockEntry;
 import net.irisshaders.iris.shaderpack.materialmap.NamespacedId;
 import net.irisshaders.iris.shaderpack.programs.ProgramSet;
+import net.irisshaders.iris.texture.pbr.PBRTextureManager;
 import org.embeddedt.embeddium.compat.iris.IBlockEntry;
 import org.embeddedt.embeddium.compat.mc.MinecraftVersionShimService;
 import org.embeddedt.embeddium.impl.gl.device.GLRenderDevice;
@@ -218,6 +219,7 @@ public class IrisVintage implements CeleritasShaderVersionService {
     public void onRenderSystemInit() {
         installVanillaStateResetter();
         ensureRenderSystemInitialized();
+        PBRTextureManager.INSTANCE.init();
         VintageShaderDiagnostics.configure();
         if (!MinecraftVersionShimService.MINECRAFT_SHIM.isDHPresent()) {
             IrisCommon.loadShaderpack();
@@ -248,6 +250,7 @@ public class IrisVintage implements CeleritasShaderVersionService {
     @Override
     public void destroyEverything() {
         IrisCommon.getPipelineManager().destroyPipeline();
+        PBRTextureManager.INSTANCE.clear();
         if (MinecraftVersionShimService.MINECRAFT_SHIM.isLevelLoaded()) {
             resetVanillaGlState();
         } else {
