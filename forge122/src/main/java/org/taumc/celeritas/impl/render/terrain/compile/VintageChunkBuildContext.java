@@ -29,6 +29,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.fluids.IFluidBlock;
 import org.embeddedt.embeddium.api.util.ColorABGR;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
+import org.embeddedt.embeddium.impl.render.ShaderModBridge;
 import org.embeddedt.embeddium.impl.render.chunk.RenderPassConfiguration;
 import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildBuffers;
 import org.embeddedt.embeddium.impl.render.chunk.compile.ChunkBuildContext;
@@ -150,6 +151,9 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
     }
 
     private Material selectMaterial(Material material, TextureAtlasSprite sprite, QuadMetadata metadata) {
+        if (metadata != null && metadata.renderType == OilRendering.RENDER_TYPE) {
+            return this.renderPassConfiguration.defaultTranslucentMaterial();
+        }
         if (metadata != null && metadata.preserveRenderLayer()) {
             return material;
         }
@@ -402,6 +406,9 @@ public class VintageChunkBuildContext extends ChunkBuildContext {
     }
 
     private static short shaderRenderType(IBlockState state) {
+        if (ShaderModBridge.areShadersEnabled() && OilRendering.isOil(state)) {
+            return OilRendering.RENDER_TYPE;
+        }
         return isFluid(state) ? (short) 1 : (short) 0;
     }
 

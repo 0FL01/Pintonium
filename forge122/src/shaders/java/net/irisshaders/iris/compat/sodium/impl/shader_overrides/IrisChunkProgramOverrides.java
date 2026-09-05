@@ -53,6 +53,10 @@ public class IrisChunkProgramOverrides {
             return null;
         }
 
+        boolean simpleStages = List.of(ShaderType.GEOM, ShaderType.TESS_CTRL, ShaderType.TESS_EVALUATE)
+                .stream().noneMatch(stage -> info.sources().getOrDefault(stage, Optional.empty()).isPresent());
+        source = VintageOilShader.patch(source, type, simpleStages);
+
         return new GlShader(type, "iris:sodium-terrain-" + pass.toString().toLowerCase(Locale.ROOT) + "." + type.fileExtension, source);
     }
 

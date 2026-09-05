@@ -1,5 +1,36 @@
 # Modded fluids: world blocks and PBR atlas
 
+## Iteration 3: oil transparency
+
+With shaderpacks enabled, BuildCraft crude oil (`fluid_block_oil_heat_0/1/2`)
+and Thermal Foundation `fluid_crude_oil` now enter the existing sorted translucent
+terrain pass. Their sampled albedo alpha is multiplied by 0.8. This is a visual
+preset, not measured absorption or depth-dependent refraction. Other fluids,
+tank geometry and the no-shader render path are unchanged.
+
+`OilRendering` identifies these explicit registry entries, guarded by IFluidBlock;
+neither a water material nor a substring in a fluid name implies this opacity.
+An internal render-type marker (257) accompanies the existing quad metadata.
+`VintageOilShader` decodes it back to fluid type 1 for the pack and carries opacity
+separately. Block IDs, vertex color/AO, lightmap and labPBR channels are untouched.
+This matters for Complementary, whose water program ignores vertex alpha for
+coverage and uses it for lighting instead. The atlas itself is not modified.
+
+The Forge122 compiler adapter wraps direct albedo samples in fragment `main`
+(including `textureAF`), leaving generic sampler helpers and other samplers alone.
+It runs after the normal `patched_shaders` dump. Geometry/tessellation pipelines
+do not receive the opacity varying; packs with those stages, helper-only albedo
+reads, or their own alpha replacement are not guaranteed transparent oil.
+
+Verification: package build and standalone `VintageOilShaderTest` (classpath:
+packaged jar, fastutil 8.5.9 and commons-lang3). The test checks marker decoding,
+AO/PBR isolation and optionally transforms a supplied `patched_shaders` directory
+into `build/oil-shader-check`. Transformation of the captured Complementary
+terrain/water/shadow sources passed. Headless EGL initialization was unavailable,
+so GPU compilation and the actual image still require a full client restart.
+Check oil top/side/flow over visible terrain, camera movement, water boundaries
+and shadows; compare vanilla water/lava and then disable shaders as controls.
+
 ## Iteration 2: generated labPBR materials
 
 Forge122 now supplies the existing PBR manager with a parallel normal/specular
