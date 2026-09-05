@@ -1,5 +1,22 @@
 # Shader diagnostics on 1.12.2
 
+## Scene-dependent player overexposure: capture
+
+Glint isolation did not resolve the user's remaining white/pink player symptom.
+With debug options enabled, `[Player light]` / `[Player light pixel]` records up
+to 90 local-player samples, at most once per second, during world entity rendering
+(not shadows). Stages: before entity, before skin, after skin, after all layers.
+Samples cover three points on the central screen column and include actual HDR
+color, program/FBO, lightmap and entity/held-light uniforms. Sparse points may
+miss the model: compare stages and screenshots rather than assuming every sample
+is a player pixel. Read framebuffer/buffer state is restored; PBO/custom packing,
+multisample and integer targets are excluded. Readback can cause small stalls.
+
+After restarting, use front-facing F5 and rotate between the bright and normal
+views for 10–20 seconds. Keep the armor and scene unchanged initially; capture
+must identify which stage first changes brightness before changing render logic.
+These diagnostics do not constitute an overexposure fix.
+
 ## Enchanted armor layer
 
 Legacy LayerArmorBase's additive glint previously ran inside gbuffers_entities
