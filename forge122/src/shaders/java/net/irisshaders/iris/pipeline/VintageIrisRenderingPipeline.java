@@ -133,6 +133,11 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private List<BufferBlendOverride> vintageLineBufferBlendOverrides = Collections.emptyList();
     private boolean vintageLineRenderingActive;
     private boolean vintageLineBridgeLogged;
+    private Program vintageArmorGlintProgram;
+    private GlFramebuffer vintageArmorGlintFramebufferBefore;
+    private GlFramebuffer vintageArmorGlintFramebufferAfter;
+    private BlendModeOverride vintageArmorGlintBlendOverride;
+    private List<BufferBlendOverride> vintageArmorGlintBufferBlends = Collections.emptyList();
 
     private Program vintageWeatherProgram;
     private GlFramebuffer vintageWeatherFramebuffer;
@@ -152,6 +157,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.createVintageHandCompatibilityProgram();
         this.createVintageLineProgram();
         this.createVintageWeatherProgram();
+        this.createVintageArmorGlintProgram();
         this.vintageEntityFallbackFramebuffer = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, new int[] {0});
     }
 
@@ -584,6 +590,52 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             IRIS_LOGGER.warn("Failed to create shader pack hand program; using the legacy compatibility bridge.", e);
             return false;
         }
+    }
+
+    private void createVintageArmorGlintProgram() {
+        ProgramSource source = this.resolver.resolve(ProgramId.ArmorGlint).orElse(null);
+        if (source == null || !source.isValid()) return;
+        try {
+            int[] buffers = this.celeritas$drawBuffersOrDefault(source);
+            ProgramBuilder builder = ProgramBuilder.begin(source.getName() + "_legacy_armor_glint",
+                    source.getSourceNullable(ShaderType.VERTEX), source.getSourceNullable(ShaderType.GEOMETRY),
+                    source.getSourceNullable(ShaderType.FRAGMENT), IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
+            CommonUniforms.addCommonUniforms(builder, this.pack.getIdMap(), this.packDirectives, this.updateNotifier, FogMode.PER_VERTEX);
+            this.customUniforms.assignTo(builder);
+            this.addGbufferOrShadowSamplers(builder, builder,
+                    () -> this.isBeforeTranslucent ? this.flippedAfterPrepare : this.flippedAfterTranslucent,
+                    false, true, true, false);
+            this.vintageArmorGlintProgram = builder.build();
+            this.customUniforms.mapholderToPass(builder, this.vintageArmorGlintProgram);
+            this.vintageArmorGlintFramebufferBefore = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, buffers);
+            this.vintageArmorGlintFramebufferAfter = this.renderTargets.createGbufferFramebuffer(this.flippedAfterTranslucent, buffers);
+            this.vintageArmorGlintBlendOverride = source.getDirectives().getBlendModeOverride().orElse(ProgramId.ArmorGlint.getBlendModeOverride());
+            this.vintageArmorGlintBufferBlends = this.celeritas$createBufferBlendOverrides(source, buffers);
+            IRIS_LOGGER.info("Using shader pack armor glint program {} with draw buffers {}", source.getName(), java.util.Arrays.toString(buffers));
+        } catch (RuntimeException e) {
+            if (this.vintageArmorGlintProgram != null) this.vintageArmorGlintProgram.delete();
+            this.vintageArmorGlintProgram = null;
+            IRIS_LOGGER.warn("Failed to create legacy armor glint program.", e);
+        }
+    }
+
+    public boolean beginVintageArmorGlint() {
+        if (!this.vintageEntityRenderingActive || this.vintageArmorGlintProgram == null
+                || CommonShadowRenderer.ACTIVE) return false;
+        this.celeritas$restoreBlendOverrides(this.vintageEntityBlendOverride, this.vintageEntityBufferBlendOverrides);
+        (this.isBeforeTranslucent ? this.vintageArmorGlintFramebufferBefore : this.vintageArmorGlintFramebufferAfter).bind();
+        this.celeritas$applyBlendOverrides(this.vintageArmorGlintBlendOverride, this.vintageArmorGlintBufferBlends);
+        this.vintageArmorGlintProgram.use();
+        this.customUniforms.push(this.vintageArmorGlintProgram);
+        return true;
+    }
+
+    public void endVintageArmorGlint() {
+        this.celeritas$restoreBlendOverrides(this.vintageArmorGlintBlendOverride, this.vintageArmorGlintBufferBlends);
+        this.vintageEntityFramebuffer.bind();
+        this.celeritas$applyBlendOverrides(this.vintageEntityBlendOverride, this.vintageEntityBufferBlendOverrides);
+        this.vintageEntityProgram.use();
+        this.customUniforms.push(this.vintageEntityProgram);
     }
 
     private void createVintageWeatherProgram() {
@@ -1403,6 +1455,10 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         if (this.vintageWeatherProgram != null) {
             this.vintageWeatherProgram.delete();
             this.vintageWeatherProgram = null;
+        }
+        if (this.vintageArmorGlintProgram != null) {
+            this.vintageArmorGlintProgram.delete();
+            this.vintageArmorGlintProgram = null;
         }
         super.destroy();
     }

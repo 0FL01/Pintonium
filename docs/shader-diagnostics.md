@@ -1,5 +1,18 @@
 # Shader diagnostics on 1.12.2
 
+## Enchanted armor layer
+
+Legacy LayerArmorBase's additive glint previously ran inside gbuffers_entities
+and its MRT layout. Complementary instead supplies gbuffers_armor_glint writing
+only color. The bridge now scopes the pack glint program, draw targets and blend
+directives to renderEnchantedGlint, restoring the enclosing entity program in a
+finally block. Vanilla animated UVs/color and equal-depth/no-depth-write behavior
+remain owned by LayerArmorBase. Glint is skipped in shadow passes. World entity
+shader rendering is required; GUI/no-shader rendering is unchanged.
+Verify enchanted and plain armor in third person and normal skin separately;
+the reported white/pink player image does not by itself prove all overexposure
+comes from glint. Hand-depth correction was subsequently confirmed by the user.
+
 ## Hand depth and water reflections
 
 With shaderpacks, the vanilla depth-only clear immediately before renderHand is
