@@ -736,11 +736,16 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             GL11.glEnd();
             int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
             int drawFbo = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+            java.nio.ByteBuffer cmBuf = java.nio.ByteBuffer.allocateDirect(4).order(java.nio.ByteOrder.nativeOrder());
+            GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, cmBuf);
             byte[] cm = new byte[4];
-            GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, java.nio.ByteBuffer.wrap(cm).order(java.nio.ByteOrder.nativeOrder()));
+            cmBuf.get(cm);
             boolean scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
             int[] vp = new int[4];
-            GL11.glGetInteger(GL11.GL_VIEWPORT, java.nio.IntBuffer.wrap(vp).order(java.nio.ByteOrder.nativeOrder()));
+            java.nio.IntBuffer vpBuf = java.nio.ByteBuffer.allocateDirect(16)
+                    .order(java.nio.ByteOrder.nativeOrder()).asIntBuffer();
+            GL11.glGetInteger(GL11.GL_VIEWPORT, vpBuf);
+            vpBuf.get(vp);
             IRIS_LOGGER.warn("[TEMP-DIAG] Weather probe: program={} drawFbo={} colorMask={} scissor={} vp={}x{}+{}+{}.",
                     program, drawFbo, cm[0] + cm[1] * 2 + cm[2] * 4 + cm[3] * 8, scissor, vp[2], vp[3], vp[0], vp[1]);
             GlStateManager.enableBlend();
