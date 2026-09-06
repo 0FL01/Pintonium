@@ -657,11 +657,19 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         }
         try {
             int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
+            String vertexSource = source.getSourceNullable(ShaderType.VERTEX);
+            String fragmentSource = source.getSourceNullable(ShaderType.FRAGMENT);
+            // TEMP DIAGNOSTIC (revert after rain diagnosis): prove rasterization.
+            if (fragmentSource != null && fragmentSource.contains("gl_FragData[0] = color;")) {
+                fragmentSource = fragmentSource.replace("gl_FragData[0] = color;",
+                        "gl_FragData[0] = vec4(1.0, 0.0, 0.0, 1.0);");
+                IRIS_LOGGER.warn("[TEMP-DIAG] Weather tint override active.");
+            }
             ProgramBuilder builder = ProgramBuilder.begin(
                     source.getName() + "_celeritas_weather",
-                    source.getSourceNullable(ShaderType.VERTEX),
+                    vertexSource,
                     source.getSourceNullable(ShaderType.GEOMETRY),
-                    source.getSourceNullable(ShaderType.FRAGMENT),
+                    fragmentSource,
                     IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
             CommonUniforms.addCommonUniforms(builder, this.pack.getIdMap(), this.packDirectives, this.updateNotifier, FogMode.PER_VERTEX);
             this.customUniforms.assignTo(builder);
