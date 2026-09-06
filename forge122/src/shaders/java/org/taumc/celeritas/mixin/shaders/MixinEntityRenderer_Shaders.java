@@ -185,6 +185,18 @@ public class MixinEntityRenderer_Shaders {
         }
     }
 
+    @WrapWithCondition(method = "addRainParticles", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/multiplayer/WorldClient;spawnParticle(Lnet/minecraft/util/EnumParticleTypes;DDDDDD[I)V",
+            ordinal = 0))
+    private boolean iris$suppressRainSplashParticles(net.minecraft.client.multiplayer.WorldClient world,
+            net.minecraft.util.EnumParticleTypes type, double x, double y, double z,
+            double vx, double vy, double vz, int[] parameters) {
+        // Shader packs render weather through their own passes; the vanilla blue
+        // splash billboards read as artifacts on top of them. Keep smoke and rain
+        // sounds untouched.
+        return this.iris$getVintagePipeline() == null;
+    }
+
     @Inject(method = "renderHand(FI)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ItemRenderer;renderItemInFirstPerson(F)V"))
     private void iris$beginHandShaderBridge(float partialTicks, int pass, CallbackInfo ci) {
         VintageIrisRenderingPipeline pipeline = this.iris$getVintagePipeline();
