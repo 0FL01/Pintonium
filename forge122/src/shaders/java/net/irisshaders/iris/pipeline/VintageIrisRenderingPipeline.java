@@ -28,6 +28,7 @@ import net.irisshaders.iris.uniforms.CommonUniforms;
 import net.irisshaders.iris.uniforms.custom.CustomUniforms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.shader.Framebuffer;
 import org.embeddedt.embeddium.compat.mc.MCShaderInstance;
 import org.embeddedt.embeddium.compat.mc.MCVertexFormat;
@@ -692,16 +693,40 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.celeritas$applyBlendOverrides(this.vintageWeatherBlendOverride, this.vintageWeatherBufferBlendOverrides);
         this.vintageWeatherProgram.use();
         this.customUniforms.push(this.vintageWeatherProgram);
+        this.celeritas$pushIdentityUnitZeroTextureMatrix();
         this.bindVintageEntityLightmap();
         return true;
     }
 
     public void endVintageWeatherRendering() {
         Program.unbind();
+        this.celeritas$popUnitZeroTextureMatrix();
         this.celeritas$restoreBlendOverrides(this.vintageWeatherBlendOverride, this.vintageWeatherBufferBlendOverrides);
         this.setPhase(this.vintageWeatherPreviousPhase);
         GbufferPrograms.runPhaseChangeNotifier();
         this.bindDefault();
+    }
+
+    /**
+     * Vanilla celestial and weather draws sample {@code tex} through the legacy
+     * unit-zero texture matrix and assume it is identity, but any GL code (mod
+     * TESRs, glint animation leftovers) may leave it dirty. Terrain and entities
+     * never notice because they use explicit matrices. Push identity for the
+     * draw and pop it afterwards so later passes see untouched state.
+     */
+    private void celeritas$pushIdentityUnitZeroTextureMatrix() {
+        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+        GlStateManager.matrixMode(GL11.GL_TEXTURE);
+        GlStateManager.pushMatrix();
+        GlStateManager.loadIdentity();
+        GlStateManager.matrixMode(GL11.GL_MODELVIEW);
+    }
+
+    private void celeritas$popUnitZeroTextureMatrix() {
+        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+        GlStateManager.matrixMode(GL11.GL_TEXTURE);
+        GlStateManager.popMatrix();
+        GlStateManager.matrixMode(GL11.GL_MODELVIEW);
     }
 
     private void createVintageSkyPrograms() {
@@ -778,11 +803,13 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.celeritas$applyBlendOverrides(this.vintageSkyTexturedBlendOverride, this.vintageSkyTexturedBufferBlendOverrides);
         this.vintageSkyTexturedProgram.use();
         this.customUniforms.push(this.vintageSkyTexturedProgram);
+        this.celeritas$pushIdentityUnitZeroTextureMatrix();
         return true;
     }
 
     public void endVintageSkyTextured() {
         Program.unbind();
+        this.celeritas$popUnitZeroTextureMatrix();
         this.celeritas$restoreBlendOverrides(this.vintageSkyTexturedBlendOverride, this.vintageSkyTexturedBufferBlendOverrides);
         this.setPhase(this.vintageSkyPreviousPhase);
         GbufferPrograms.runPhaseChangeNotifier();
