@@ -36,7 +36,6 @@ import org.jetbrains.annotations.Nullable;
 import org.taumc.celeritas.interfaces.IRenderTargetExt;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL20;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -705,6 +704,10 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.setPhase(WorldRenderingPhase.RAIN_SNOW);
         GbufferPrograms.runPhaseChangeNotifier();
         this.celeritas$applyBlendOverrides(this.vintageWeatherBlendOverride, this.vintageWeatherBufferBlendOverrides);
+        // TEMP DIAGNOSTIC (revert with the tint): remove blend and depth culling
+        // so red quads are visible whenever geometry reaches rasterization.
+        GlStateManager.disableBlend();
+        GlStateManager.depthFunc(GL11.GL_ALWAYS);
         this.vintageWeatherProgram.use();
         this.customUniforms.push(this.vintageWeatherProgram);
         this.celeritas$pushIdentityUnitZeroTextureMatrix();
@@ -715,7 +718,12 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     public void endVintageWeatherRendering() {
         if (this.vintageWeatherLogCount < 4) {
             this.vintageWeatherLogCount++;
-            this.celeritas$logWeatherReadback();
+            GlStateManager.enableBlend();
+            GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA,
+                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE,
+                    GlStateManager.DestFactor.ZERO);
+            GlStateManager.depthFunc(GL11.GL_LEQUAL);
+            IRIS_LOGGER.warn("[TEMP-DIAG] Weather bridge finished.");
         }
         Program.unbind();
         this.celeritas$popUnitZeroTextureMatrix();
@@ -723,41 +731,6 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.setPhase(this.vintageWeatherPreviousPhase);
         GbufferPrograms.runPhaseChangeNotifier();
         this.bindDefault();
-    }
-
-    /**
-     * TEMP DIAGNOSTIC: read back the center of the still-bound weather framebuffer
-     * once to prove whether rain fragments land in colortex0.
-     */
-    private void celeritas$logWeatherReadback() {
-        try {
-            int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-            boolean depthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
-            int[] vp = new int[4];
-            java.nio.IntBuffer vpBuf = java.nio.IntBuffer.wrap(vp);
-            GL11.glGetInteger(GL11.GL_VIEWPORT, vpBuf);
-            int w = 64;
-            int h = 64;
-            int x = Math.max(0, vp[2] / 2 - w / 2);
-            int y = Math.max(0, vp[3] / 2 - h / 2);
-            java.nio.ByteBuffer pixels = java.nio.ByteBuffer.allocateDirect(w * h * 4);
-            GL11.glReadPixels(x, y, w, h, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, pixels);
-            int maxR = 0;
-            int redCount = 0;
-            for (int i = 0; i < w * h; i++) {
-                int r = pixels.get(i * 4) & 0xFF;
-                if (r > maxR) {
-                    maxR = r;
-                }
-                if (r > 128) {
-                    redCount++;
-                }
-            }
-            IRIS_LOGGER.warn("[TEMP-DIAG] Weather readback: maxR={} redCount={}/{} program={} depthTest={} vp={}x{}+{}+{}.",
-                    maxR, redCount, w * h, program, depthTest, vp[2], vp[3], vp[0], vp[1]);
-        } catch (RuntimeException | Error e) {
-            IRIS_LOGGER.warn("[TEMP-DIAG] Weather readback failed.", e);
-        }
     }
 
     /**
