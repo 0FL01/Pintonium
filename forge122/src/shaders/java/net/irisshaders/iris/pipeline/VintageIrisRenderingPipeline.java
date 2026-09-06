@@ -61,6 +61,11 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private BlendModeOverride vintageEntityBlendOverride;
     private List<BufferBlendOverride> vintageEntityBufferBlendOverrides = Collections.emptyList();
     private boolean vintageEntityRenderingActive;
+    // True while the entity program bound by beginVintageEntityRendering is still
+    // current. Lets the per-entity update skip the redundant barrier + glUseProgram;
+    // per-entity uniforms are still refreshed. Cleared by anything that binds
+    // another program (other bridges, glint, fallback, end).
+    private boolean vintageEntityProgramBound;
 
     @Nullable
     private Program vintageEntityCompatProgram;
@@ -639,6 +644,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.celeritas$applyBlendOverrides(this.vintageArmorGlintBlendOverride, this.vintageArmorGlintBufferBlends);
         this.vintageArmorGlintProgram.use();
         this.customUniforms.push(this.vintageArmorGlintProgram);
+        this.vintageEntityProgramBound = false;
         return true;
     }
 
@@ -648,6 +654,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.celeritas$applyBlendOverrides(this.vintageEntityBlendOverride, this.vintageEntityBufferBlendOverrides);
         this.vintageEntityProgram.use();
         this.customUniforms.push(this.vintageEntityProgram);
+        this.vintageEntityProgramBound = true;
     }
 
     private void createVintageWeatherProgram() {
@@ -1086,6 +1093,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             this.vintageEntityCompatProgram.use();
             this.bindVintageEntityLightmap();
             this.vintageEntityCompatRenderingActive = true;
+            this.vintageEntityProgramBound = true;
             return true;
         }
 
@@ -1112,18 +1120,29 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.bindVintageEntityLightmap();
         this.customUniforms.push(this.vintageEntityProgram);
         this.vintageEntityRenderingActive = true;
+        this.vintageEntityProgramBound = true;
         return true;
     }
 
     public void updateVintageEntityUniforms() {
         if (this.vintageEntityCompatRenderingActive) {
-            this.vintageEntityCompatProgram.use();
+            if (this.vintageEntityProgramBound) {
+                this.vintageEntityCompatProgram.useAlreadyBound();
+            } else {
+                this.vintageEntityCompatProgram.use();
+                this.vintageEntityProgramBound = true;
+            }
             this.bindVintageEntityLightmap();
             return;
         }
 
         if (this.vintageEntityRenderingActive) {
-            this.vintageEntityProgram.use();
+            if (this.vintageEntityProgramBound) {
+                this.vintageEntityProgram.useAlreadyBound();
+            } else {
+                this.vintageEntityProgram.use();
+                this.vintageEntityProgramBound = true;
+            }
             this.bindVintageEntityLightmap();
             GbufferPrograms.runFallbackEntityListener();
         }
@@ -1147,6 +1166,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         GbufferPrograms.beginEntities();
         GbufferPrograms.runPhaseChangeNotifier();
         Program.unbind();
+        this.vintageEntityProgramBound = false;
         return true;
     }
 
@@ -1485,6 +1505,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     }
 
     public void endVintageEntityRendering() {
+        this.vintageEntityProgramBound = false;
         if (this.vintageEntityCompatRenderingActive) {
             Program.unbind();
             this.celeritas$restoreBlendOverrides(this.vintageEntityCompatBlendOverride, this.vintageEntityCompatBufferBlendOverrides);

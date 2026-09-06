@@ -66,6 +66,10 @@ public class FinalPassRenderer {
 	private final WorldRenderingPipeline pipeline;
 	private int lastColorTextureId;
 	private int lastColorTextureVersion;
+	// Full unbind sweep exists only for shader pack reloading; pipelines are
+	// recreated on reload, so one sweep per lifetime is equivalent (see
+	// CompositeRenderer.didInitialUnbindSweep).
+	private boolean didInitialUnbindSweep;
 
 	// TODO: The length of this argument list is getting a bit ridiculous
 	public FinalPassRenderer(WorldRenderingPipeline pipeline, ProgramSet pack, RenderTargets renderTargets, TextureAccess noiseTexture, ShaderStorageBufferHolder holder,
@@ -291,12 +295,15 @@ public class FinalPassRenderer {
 		ProgramSamplers.clearActiveSamplers();
 		GL_STATE_MANAGER.glUseProgram(0);
 
-		for (int i = 0; i < SamplerLimits.get().getMaxTextureUnits(); i++) {
-			// Unbind all textures that we may have used.
-			// NB: This is necessary for shader pack reloading to work properly
-			if (GL_STATE_MANAGER.getBoundTexture(i) != 0) {
-				RENDER_SYSTEM.glActiveTexture(GL15C.GL_TEXTURE0 + i);
-				RENDER_SYSTEM.bindTexture(0);
+		if (!didInitialUnbindSweep) {
+			didInitialUnbindSweep = true;
+			for (int i = 0; i < SamplerLimits.get().getMaxTextureUnits(); i++) {
+				// Unbind all textures that we may have used.
+				// NB: This is necessary for shader pack reloading to work properly
+				if (GL_STATE_MANAGER.getBoundTexture(i) != 0) {
+					RENDER_SYSTEM.glActiveTexture(GL15C.GL_TEXTURE0 + i);
+					RENDER_SYSTEM.bindTexture(0);
+				}
 			}
 		}
 

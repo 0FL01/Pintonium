@@ -131,7 +131,7 @@ public class CeleritasWorldRenderer extends SimpleWorldRenderer<WorldClient, Vin
         HeldItemLight light = level == 0 || !ShaderModBridge.areShadersEnabled() ? HeldItemLight.NONE : new HeldItemLight(
                 MathHelper.floor(player.posX), MathHelper.floor(player.posY + player.getEyeHeight()),
                 MathHelper.floor(player.posZ), level);
-        if (!light.equals(this.terrainHeldItemLight)) {
+        if (!light.equals(this.terrainHeldItemLight) && !light.closeEnoughForRebake(this.terrainHeldItemLight)) {
             HeldItemLight previous = this.terrainHeldItemLight;
             this.terrainHeldItemLight = light;
             previous.invalidate(this);

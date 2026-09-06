@@ -67,6 +67,11 @@ public class CompositeRenderer {
 	private final Set<GlImage> customImages;
 	private final TextureStage textureStage;
 	private final WorldRenderingPipeline pipeline;
+	// The full unbind sweep below exists only for shader pack reloading (stale
+	// texture units after destroy). Pipelines are rebuilt on reload, so running
+	// it once per pipeline lifetime is equivalent and saves ~units*4 GL calls
+	// on every chain (begin/prepare/deferred/composite) every frame.
+	private boolean didInitialUnbindSweep;
 
 	public CompositeRenderer(WorldRenderingPipeline pipeline, PackDirectives packDirectives, ProgramSource[] sources, ComputeSource[][] computes, RenderTargets renderTargets, ShaderStorageBufferHolder holder,
 							 TextureAccess noiseTexture, FrameUpdateNotifier updateNotifier,
@@ -290,12 +295,16 @@ public class CompositeRenderer {
 		GL_STATE_MANAGER.glUseProgram(0);
 
 		// NB: Unbinding all of these textures is necessary for proper shaderpack reloading.
-		for (int i = 0; i < SamplerLimits.get().getMaxTextureUnits(); i++) {
-			// Unbind all textures that we may have used.
-			// NB: This is necessary for shader pack reloading to work propely
-			if (GL_STATE_MANAGER.getBoundTexture(i) != 0) { // GlStateManagerAccessor.getTEXTURES()[i].binding
-				RENDER_SYSTEM.glActiveTexture(GL15C.GL_TEXTURE0 + i);
-				RENDER_SYSTEM.bindTexture(0);
+		// Pipelines (and these renderers) are recreated on reload, so one sweep suffices.
+		if (!didInitialUnbindSweep) {
+			didInitialUnbindSweep = true;
+			for (int i = 0; i < SamplerLimits.get().getMaxTextureUnits(); i++) {
+				// Unbind all textures that we may have used.
+				// NB: This is necessary for shader pack reloading to work propely
+				if (GL_STATE_MANAGER.getBoundTexture(i) != 0) { // GlStateManagerAccessor.getTEXTURES()[i].binding
+					RENDER_SYSTEM.glActiveTexture(GL15C.GL_TEXTURE0 + i);
+					RENDER_SYSTEM.bindTexture(0);
+				}
 			}
 		}
 

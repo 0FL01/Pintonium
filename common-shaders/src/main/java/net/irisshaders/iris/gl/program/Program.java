@@ -34,6 +34,18 @@ public final class Program extends GlObject {
 		images.update();
 	}
 
+	/**
+	 * Refreshes uniforms, samplers and images without rebinding the program or
+	 * issuing a memory barrier. The caller must guarantee this program is already
+	 * the current GL program (e.g. bound once for a batch of draws that cannot
+	 * switch programs in between).
+	 */
+	public void useAlreadyBound() {
+		uniforms.update();
+		samplers.update();
+		images.update();
+	}
+
 	public void destroyInternal() {
 		GL_STATE_MANAGER.glDeleteProgram(handle());
 	}

@@ -914,7 +914,7 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
         this.compositeRenderer = new CompositeRenderer(
                 this,
                 programSet.getPackDirectives(),
-                programSet.getComposite(),
+                ComplementaryDeadPassFilter.filterComposite(programSet.getComposite(), programSet.getPack()),
                 programSet.getCompositeCompute(),
                 renderTargets,
                 shaderStorageBufferHolder,
