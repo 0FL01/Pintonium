@@ -244,6 +244,25 @@ public class ShaderPack {
 		// Prepare our include processor
 		IncludeProcessor includeProcessor = new IncludeProcessor(graph);
 
+		// OptiFine-style dimension macros (NETHER / OVERWORLD / END) keyed by dimension
+		// folder. Without these every dimension-gated block in a pack compiles to its
+		// fallback (e.g. the Nether renders with overworld sky/fog). Base programs keep
+		// the old behavior (no macro), only per-dimension folders gain one.
+		Map<String, String> dimensionMacroByFolder = new HashMap<>();
+		for (Map.Entry<NamespacedId, String> entry : dimensionMap.entrySet()) {
+			String macro = null;
+			if (DimensionId.NETHER.equals(entry.getKey())) {
+				macro = "NETHER";
+			} else if (DimensionId.OVERWORLD.equals(entry.getKey())) {
+				macro = "OVERWORLD";
+			} else if (DimensionId.END.equals(entry.getKey())) {
+				macro = "END";
+			}
+			if (macro != null) {
+				dimensionMacroByFolder.putIfAbsent(entry.getValue(), macro);
+			}
+		}
+
 		// Set up our source provider for creating ProgramSets
 		Iterable<StringPair> finalEnvironmentDefines1 = environmentDefines;
 		this.sourceProvider = (path) -> {
@@ -251,6 +270,15 @@ public class ShaderPack {
 			// Removes the first "/" in the path if present, and the file
 			// extension in order to represent the path as its program name
 			String programString = pathString.substring(pathString.indexOf("/") == 0 ? 1 : 0, pathString.lastIndexOf("."));
+			int slash = programString.indexOf('/');
+			String dimensionMacro = slash < 0 ? null : dimensionMacroByFolder.get(programString.substring(0, slash));
+			Iterable<StringPair> programDefines = finalEnvironmentDefines1;
+			if (dimensionMacro != null) {
+				List<StringPair> withDimension = new ArrayList<>();
+				finalEnvironmentDefines1.forEach(withDimension::add);
+				withDimension.add(new StringPair(dimensionMacro, ""));
+				programDefines = withDimension;
+			}
 
 			// Return an empty program source if the program is disabled by the current profile
 			if (disabledPrograms.contains(programString)) {
@@ -277,7 +305,7 @@ public class ShaderPack {
 			// directly. This removes one obstacle to accurate reporting of line numbers for errors,
 			// though there exist many more (such as relocating all #extension directives and similar things)
 			String source = builder.toString();
-			source = JcppProcessor.glslPreprocessSource(source, finalEnvironmentDefines1);
+			source = JcppProcessor.glslPreprocessSource(source, programDefines);
 
 			return source;
 		};
