@@ -1,5 +1,39 @@
 # Forge122 shader performance
 
+## Complementary option iteration (POM off, reflections 1, clouds 1)
+
+Local `ComplementaryUnbound_r5.9.zip.txt` (not git-tracked): `POM=true→false`,
+`WATER_REFLECT_QUALITY=2→1`, `CLOUD_QUALITY=2→1`. Everything else unchanged,
+notably `BLOCK_REFLECT_QUALITY=2` + `RP_MODE=3` (oil PBR reflections stay on),
+`DETAIL_QUALITY=2` (TAA stays on), shadows 1024/distance 96.
+
+- POM off is expected to be pixel-free: `GENERATED_NORMALS=false` and the load
+  log reports `[Fluid PBR] NORMAL atlas ... authored=0`, so there is no height
+  data for the parallax loop to displace with. Still requires a screenshot
+  comparison against the pre-change baseline.
+- Water SSR stays enabled at LOW-profile quality; clouds stay volumetric at
+  LOW-profile quality. Both need a look at reflections/sky on the same camera,
+  time and weather. One-line revert each if the regression is visible.
+
+## Shadow/CPU iteration (no image change by construction)
+
+## Shadow/CPU iteration (no image change by construction)
+
+`VintageShadowRenderer`: one `BlockPos`/`IBlockState` fetch per TESR per pass
+instead of up to three, a hoisted player `ResourceLocation` constant, and a
+reused visible-TESR list instead of a fresh `ArrayList` every frame. Entity
+submission, frustum filtering, caster programs and state restoration untouched.
+
+`CommonIrisRenderingPipeline.onSetShaderTexture`: skip the PBR listener
+round-trip when both the texture id and the resolved holder are identical to
+the previous bind. Holder identity (not just id) is compared so stitch/reload
+invalidation still refreshes state. Texture, AO, lightmap and labPBR channels
+are not altered.
+
+Verification: package build, `:common-shaders:test`, standalone oil/triangle
+regressions. Frame-time improvement and mod-renderer compatibility require
+client verification after a full restart.
+
 ## Shadow snapshot allocation iteration
 
 `VintageShadowState` now borrows zeroed scratch buffers from LWJGL's existing

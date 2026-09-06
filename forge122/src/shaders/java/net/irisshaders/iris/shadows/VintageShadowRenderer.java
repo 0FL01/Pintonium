@@ -28,6 +28,7 @@ import net.irisshaders.iris.shadows.frustum.fallback.NonCullingFrustum;
 import net.irisshaders.iris.uniforms.CameraUniforms;
 import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import net.irisshaders.iris.uniforms.CelestialUniforms;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
@@ -40,6 +41,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraftforge.client.ForgeHooksClient;
 import net.minecraftforge.client.MinecraftForgeClient;
@@ -72,6 +74,8 @@ public final class VintageShadowRenderer extends CommonShadowRenderer {
     private int entityAttribute = -1;
     private int blockEntityUniform = -1;
     private int frame;
+    private static final ResourceLocation PLAYER_KEY = new ResourceLocation("minecraft", "player");
+    private final List<TileEntity> shadowTiles = new ArrayList<>();
 
     public VintageShadowRenderer(VintageIrisRenderingPipeline pipeline, ProgramSource source, PackDirectives directives,
                                  ShadowRenderTargets targets, ShadowCompositeRenderer composite, boolean separateSamplers) {
@@ -236,8 +240,8 @@ public final class VintageShadowRenderer extends CommonShadowRenderer {
             renderedShadowEntities = 0;
             renderedShadowBlockEntities = 0;
             List<Entity> entities = new ArrayList<>(mc.world.loadedEntityList);
-            List<TileEntity> tiles = new ArrayList<>();
-            renderer.forEachVisibleBlockEntity(tiles::add);
+            shadowTiles.clear();
+            renderer.forEachVisibleBlockEntity(shadowTiles::add);
             // Both Forge entity passes precede the depth snapshot, just like modern buffered casters.
             for (int pass = 0; pass < 2; pass++) {
                 ForgeHooksClient.setRenderPass(pass);
@@ -247,7 +251,7 @@ public final class VintageShadowRenderer extends CommonShadowRenderer {
                     if (player ? !shouldRenderPlayer : !shouldRenderEntities) continue;
                     if (entity instanceof EntityPlayer && ((EntityPlayer) entity).isSpectator()) continue;
                     if (!entity.shouldRenderInPass(pass) || !visible(entityViewport, entity.getRenderBoundingBox())) continue;
-                    ResourceLocation key = player ? new ResourceLocation("minecraft", "player") : EntityList.getKey(entity);
+                    ResourceLocation key = player ? PLAYER_KEY : EntityList.getKey(entity);
                     var ids = WorldRenderingSettings.INSTANCE.getEntityIds();
                     int id = ids == null || key == null ? 0 : ids.getInt(new NamespacedId(key.getNamespace(), key.getPath()));
                     state.setCurrentEntity(id);
@@ -262,24 +266,26 @@ public final class VintageShadowRenderer extends CommonShadowRenderer {
                     renderedShadowEntities++;
                 }
                 pipeline.setPhase(WorldRenderingPhase.BLOCK_ENTITIES);
-                for (TileEntity tile : tiles) {
+                for (TileEntity tile : shadowTiles) {
                     if (tile.isInvalid() || !tile.shouldRenderInPass(pass)) continue;
                     if (TileEntityRendererDispatcher.instance.getRenderer(tile) == null) continue;
+                    BlockPos tilePos = tile.getPos();
+                    IBlockState tileState = mc.world.getBlockState(tilePos);
                     if (!shouldRenderBlockEntities && (!shouldRenderLightBlockEntities
-                            || mc.world.getBlockState(tile.getPos()).getLightValue(mc.world, tile.getPos()) == 0)) continue;
+                            || tileState.getLightValue(mc.world, tilePos) == 0)) continue;
                     if (!visible(entityViewport, tile.getRenderBoundingBox())) continue;
                     var blockIds = VintageWorldRenderingSettings.INSTANCE.getBlockStateIds();
-                    int id = blockIds == null ? 0 : blockIds.getInt(mc.world.getBlockState(tile.getPos()));
+                    int id = blockIds == null ? 0 : blockIds.getInt(tileState);
                     state.setCurrentEntity(0);
                     state.setCurrentBlockEntity(id);
                     prepareCaster(mc, ticks, id);
-                    int light = mc.world.getCombinedLight(tile.getPos(), 0);
+                    int light = mc.world.getCombinedLight(tilePos, 0);
                     OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, light & 65535, light >>> 16);
                     // Flush fast TESRs individually: mc_Entity and blockEntityId are draw constants.
                     TileEntityRendererDispatcher.instance.preDrawBatch();
                     try {
-                        TileEntityRendererDispatcher.instance.render(tile, tile.getPos().getX() - camera.x,
-                                tile.getPos().getY() - camera.y, tile.getPos().getZ() - camera.z, ticks, -1, 1);
+                        TileEntityRendererDispatcher.instance.render(tile, tilePos.getX() - camera.x,
+                                tilePos.getY() - camera.y, tilePos.getZ() - camera.z, ticks, -1, 1);
                         renderedShadowBlockEntities++;
                     } finally {
                         try {

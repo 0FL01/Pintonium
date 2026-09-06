@@ -180,6 +180,8 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
     protected boolean shouldBindPBR;
     protected int currentNormalTexture;
     protected int currentSpecularTexture;
+    private int lastPbrTextureId = -1;
+    private PBRTextureHolder lastPbrHolder;
     protected ColorSpace currentColorSpace;
     protected CloudSetting dhCloudSetting;
     protected int mainFBWidth;
@@ -404,6 +406,13 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
     public void onSetShaderTexture(int id) {
         if (shouldBindPBR && isRenderingWorld) {
             PBRTextureHolder pbrHolder = PBRTextureManager.INSTANCE.getOrLoadHolder(id);
+            // Atlas bindings repeat on nearly every program bind; same id and holder
+            // means identical material state, so skip the listener round-trip.
+            if (id == lastPbrTextureId && pbrHolder == lastPbrHolder) {
+                return;
+            }
+            lastPbrTextureId = id;
+            lastPbrHolder = pbrHolder;
             currentNormalTexture = pbrHolder.normalTexture().getId();
             currentSpecularTexture = pbrHolder.specularTexture().getId();
 
