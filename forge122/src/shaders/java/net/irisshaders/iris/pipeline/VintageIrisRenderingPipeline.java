@@ -666,6 +666,12 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
                         "gl_FragData[0] = vec4(1.0, 0.0, 0.0, 1.0);");
                 IRIS_LOGGER.warn("[TEMP-DIAG] Weather tint override active.");
             }
+            // TEMP DIAGNOSTIC: map every rain quad to a full-screen red flash.
+            if (vertexSource != null && vertexSource.contains("gl_Position = gl_ProjectionMatrix * gbufferModelView * position;")) {
+                vertexSource = vertexSource.replace("gl_Position = gl_ProjectionMatrix * gbufferModelView * position;",
+                        "gl_Position = vec4(gl_Vertex.x > 0.0 ? 1.0 : -1.0, gl_Vertex.y > 0.0 ? 1.0 : -1.0, 0.5, 1.0);");
+                IRIS_LOGGER.warn("[TEMP-DIAG] Weather fullscreen probe active.");
+            }
             ProgramBuilder builder = ProgramBuilder.begin(
                     source.getName() + "_celeritas_weather",
                     vertexSource,
