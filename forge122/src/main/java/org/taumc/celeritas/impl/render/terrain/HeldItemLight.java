@@ -8,20 +8,6 @@ import net.minecraft.item.ItemStack;
 public record HeldItemLight(double x, double y, double z, int level) {
     public static final HeldItemLight NONE = new HeldItemLight(0, 0, 0, 0);
 
-    /**
-     * Same emission with the source inside rebake tolerance (2 blocks). Lets the
-     * terrain loop skip rebuild storms while walking with a light: the baked pool
-     * trails by at most 2 blocks instead of rebaking ~50 sections per step.
-     */
-    public boolean closeEnoughForRebake(HeldItemLight other) {
-        if (other == null || this.level != other.level || this.level == 0) {
-            return false;
-        }
-        return Math.abs(this.x - other.x) <= 2.0
-                && Math.abs(this.y - other.y) <= 2.0
-                && Math.abs(this.z - other.z) <= 2.0;
-    }
-
     public static int lightValue(ItemStack stack) {
         if (stack.isEmpty()) {
             return 0;
