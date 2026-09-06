@@ -734,7 +734,8 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
             int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
             boolean depthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
             int[] vp = new int[4];
-            GL11.glGetInteger(GL11.GL_VIEWPORT, vp);
+            java.nio.IntBuffer vpBuf = java.nio.IntBuffer.wrap(vp);
+            GL11.glGetInteger(GL11.GL_VIEWPORT, vpBuf);
             int w = 64;
             int h = 64;
             int x = Math.max(0, vp[2] / 2 - w / 2);
