@@ -36,6 +36,8 @@ import org.jetbrains.annotations.Nullable;
 import org.taumc.celeritas.interfaces.IRenderTargetExt;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL20;
+import org.lwjgl.opengl.GL30;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -724,6 +726,23 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     public void endVintageWeatherRendering() {
         if (this.vintageWeatherLogCount < 4) {
             this.vintageWeatherLogCount++;
+            // TEMP DIAGNOSTIC: our own fullscreen red quad through the active
+            // bridge program/state, bypassing vanilla's vertex buffer entirely.
+            GL11.glBegin(GL11.GL_QUADS);
+            GL11.glVertex2f(-1.0f, -1.0f);
+            GL11.glVertex2f(1.0f, -1.0f);
+            GL11.glVertex2f(1.0f, 1.0f);
+            GL11.glVertex2f(-1.0f, 1.0f);
+            GL11.glEnd();
+            int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+            int drawFbo = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+            byte[] cm = new byte[4];
+            GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, java.nio.ByteBuffer.wrap(cm).order(java.nio.ByteOrder.nativeOrder()));
+            boolean scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+            int[] vp = new int[4];
+            GL11.glGetInteger(GL11.GL_VIEWPORT, java.nio.IntBuffer.wrap(vp).order(java.nio.ByteOrder.nativeOrder()));
+            IRIS_LOGGER.warn("[TEMP-DIAG] Weather probe: program={} drawFbo={} colorMask={} scissor={} vp={}x{}+{}+{}.",
+                    program, drawFbo, cm[0] + cm[1] * 2 + cm[2] * 4 + cm[3] * 8, scissor, vp[2], vp[3], vp[0], vp[1]);
             GlStateManager.enableBlend();
             GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA,
                     GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE,
