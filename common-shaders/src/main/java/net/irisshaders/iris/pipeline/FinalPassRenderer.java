@@ -330,7 +330,34 @@ public class FinalPassRenderer {
 							1, 1, GL11C.GL_RGBA, GL11C.GL_FLOAT, pixel);
 					samples.append(String.format(" y%.2f=(%.2f,%.2f,%.2f)", 0.25 * row, pixel[0], pixel[1], pixel[2]));
 				}
+				samples.append(" | colortex0");
+				probeRenderTarget(samples, 0);
+				samples.append(" | colortex3");
+				probeRenderTarget(samples, 3);
 				IRIS_LOGGER.info("[FogDiag] fogColor=({}, {}, {}) final{}", fogColor3.x, fogColor3.y, fogColor3.z, samples);
+			}
+		}
+	}
+
+	// TEMP diagnostics helper: center-pixel samples of a render target (main and alt
+	// textures) via DSA, without disturbing binds. Remove after use.
+	private void probeRenderTarget(StringBuilder out, int index) {
+		RenderTarget target = renderTargets.get(index);
+		if (target == null) {
+			out.append("=absent");
+			return;
+		}
+		int width = renderTargets.getCurrentWidth();
+		int height = renderTargets.getCurrentHeight();
+		int x = Math.max(0, width / 2);
+		java.nio.FloatBuffer buf = org.lwjgl.BufferUtils.createFloatBuffer(4);
+		int rows = Math.max(1, height / 4);
+		for (int textureId : new int[] {target.getMainTexture(), target.getAltTexture()}) {
+			for (int row = 1; row <= 3; row++) {
+				buf.clear();
+				GL45C.glGetTextureSubImage(textureId, 0, x, rows * row, 0, 1, 1, 1,
+						GL11C.GL_RGBA, GL11C.GL_FLOAT, buf);
+				out.append(String.format(" (%.2f,%.2f,%.2f)", buf.get(0), buf.get(1), buf.get(2)));
 			}
 		}
 	}
