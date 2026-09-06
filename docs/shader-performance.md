@@ -9,6 +9,28 @@ delta cannot be fully attributed to the changes, but GPU headroom reappeared
 (99% → 91%) with no reported visual defects. Next RECON below works from this
 checkpoint.
 
+## Live follow-up 2: 74–80 FPS, GPU 93%
+
+After shadow distance 64, smoothing 2 and the caster-uniform skip: 80 FPS /
+12.5 ms on the same coastal scene family (screenshot). No visual defects
+reported. FXAA was audited and needs no action: `FXAA(` is never invoked in
+any pack program. Bloom and DOF confirmed off (`BLOOM_ENABLED=-1` gates the
+working bloom code, `WORLD_BLUR=0`).
+
+## Leaf shadow optimisation (options only, no code)
+
+`LEAF_SHADOW_OPTIMISATION_DEFINE=-1→1`. In `leaves.glsl` this swaps the
+per-pixel leaf translucency shadow term for a cheaper approximation; shadow
+casters and all other materials are untouched. Leaf shadows may read slightly
+denser — compare foliage shadows on the same screenshot scene, one-line
+revert if visible.
+
+Honest status after this step: the no-regression well is nearly dry. Audited
+and closed with no action: FXAA (never invoked), bloom (gated off), DOF
+(off), PBR reflections and TAA (load-bearing visuals). The remaining lever
+with real weight is render distance 24→20 (~30% fewer sections, visible loss
+of far terrain) — needs an explicit decision, not included here.
+
 ## Shadow distance/smoothing + caster uniform skip
 
 Local options: `shadowDistance=96→64`, `SHADOW_SMOOTHING=3→2`. Fewer shadow
