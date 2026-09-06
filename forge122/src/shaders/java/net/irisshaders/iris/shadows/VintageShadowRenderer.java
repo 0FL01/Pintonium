@@ -76,6 +76,10 @@ public final class VintageShadowRenderer extends CommonShadowRenderer {
     private int frame;
     private static final ResourceLocation PLAYER_KEY = new ResourceLocation("minecraft", "player");
     private final List<TileEntity> shadowTiles = new ArrayList<>();
+    private WorldRenderingPhase lastCasterPhase;
+    private int lastCasterEntity;
+    private int lastCasterBlockEntity;
+    private boolean casterStatePushed;
 
     public VintageShadowRenderer(VintageIrisRenderingPipeline pipeline, ProgramSource source, PackDirectives directives,
                                  ShadowRenderTargets targets, ShadowCompositeRenderer composite, boolean separateSamplers) {
@@ -239,6 +243,7 @@ public final class VintageShadowRenderer extends CommonShadowRenderer {
             TileEntityRendererDispatcher.staticPlayerZ = camera.z;
             renderedShadowEntities = 0;
             renderedShadowBlockEntities = 0;
+            casterStatePushed = false;
             List<Entity> entities = new ArrayList<>(mc.world.loadedEntityList);
             shadowTiles.clear();
             renderer.forEachVisibleBlockEntity(shadowTiles::add);
@@ -369,13 +374,24 @@ public final class VintageShadowRenderer extends CommonShadowRenderer {
         bufferBlends.forEach(BufferBlendOverride::apply);
         if (casterProgram != null) {
             casterProgram.use();
-            GbufferPrograms.runFallbackEntityListener();
-            GbufferPrograms.runPhaseChangeNotifier();
-            if (blockEntityUniform >= 0) {
-                GL20.glUniform1i(blockEntityUniform, CapturedRenderingState.INSTANCE.getCurrentRenderedBlockEntity());
+            // Full GL/framebuffer state above is restored per caster because entity
+            // rendering clobbers it, but uniform uploads only depend on phase and ids.
+            int blockEntity = CapturedRenderingState.INSTANCE.getCurrentRenderedBlockEntity();
+            WorldRenderingPhase casterPhase = pipeline.getPhase();
+            if (!casterStatePushed || casterPhase != lastCasterPhase || id != lastCasterEntity
+                    || blockEntity != lastCasterBlockEntity) {
+                casterStatePushed = true;
+                lastCasterPhase = casterPhase;
+                lastCasterEntity = id;
+                lastCasterBlockEntity = blockEntity;
+                GbufferPrograms.runFallbackEntityListener();
+                GbufferPrograms.runPhaseChangeNotifier();
+                if (blockEntityUniform >= 0) {
+                    GL20.glUniform1i(blockEntityUniform, blockEntity);
+                }
+                pipeline.getCustomUniforms().push(casterProgram);
+                if (entityAttribute >= 0) GL20.glVertexAttrib3f(entityAttribute, id, 0, 0);
             }
-            pipeline.getCustomUniforms().push(casterProgram);
-            if (entityAttribute >= 0) GL20.glVertexAttrib3f(entityAttribute, id, 0, 0);
         } else {
             // A pack without shadow.vsh uses the real fixed-function depth path.
             Program.unbind();

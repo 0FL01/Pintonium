@@ -1,5 +1,28 @@
 # Forge122 shader performance
 
+## Live follow-up: 72 FPS / 13.8 ms, GPU 91%
+
+Same coastal scene family after all four iterations (POM off, water/clouds 1,
+shadow/CPU trim, Alfheim 1.6 + Red Core 0.7.1 active). Previous checkpoint was
+60 FPS / 16.6 ms at GPU 99%. Time of day differs between screenshots, so the
+delta cannot be fully attributed to the changes, but GPU headroom reappeared
+(99% → 91%) with no reported visual defects. Next RECON below works from this
+checkpoint.
+
+## Shadow distance/smoothing + caster uniform skip
+
+Local options: `shadowDistance=96→64`, `SHADOW_SMOOTHING=3→2`. Fewer shadow
+casters per frame on CPU and GPU; the same 1024 map over a smaller area keeps
+near shadows sharp. Distant shadows beyond 64 blocks are gone; edge softness
+is one step harder. Revert one line each if visible.
+
+`prepareCaster` still restores full GL/framebuffer state per caster (entity
+rendering clobbers it), but the uniform-upload tail (phase/entity listeners,
+blockEntityId uniform, custom uniform push, mc_Entity attrib) now runs only
+when phase, entity id or block-entity value changed since the previous caster.
+Key resets at each shadow pass start. No draws, filtering or restoration
+removed.
+
 ## Complementary option iteration (POM off, reflections 1, clouds 1)
 
 Local `ComplementaryUnbound_r5.9.zip.txt` (not git-tracked): `POM=true→false`,
