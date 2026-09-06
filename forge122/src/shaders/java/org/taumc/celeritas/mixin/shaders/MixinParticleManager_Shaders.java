@@ -3,7 +3,9 @@ package org.taumc.celeritas.mixin.shaders;
 import net.irisshaders.iris.IrisCommon;
 import net.irisshaders.iris.pipeline.VintageIrisRenderingPipeline;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
+import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.ParticleManager;
+import net.minecraft.client.particle.ParticleRain;
 import net.minecraft.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -67,5 +69,15 @@ public class MixinParticleManager_Shaders {
     private void celeritas$endLitParticleShaderBridge(Entity entityIn, float partialTicks, CallbackInfo ci) {
         this.celeritas$endParticles(this.celeritas$litParticlesActive);
         this.celeritas$litParticlesActive = false;
+    }
+
+    @Inject(method = "addEffect", at = @At("HEAD"), cancellable = true)
+    private void celeritas$suppressRainSplashUnderShaders(Particle particle, CallbackInfo ci) {
+        if (particle instanceof ParticleRain && this.celeritas$getVintagePipeline() != null) {
+            // Shader packs render weather through their own passes; the vanilla
+            // blue splash billboards read as artifacts on top of them. addEffect
+            // is the single choke point every client-side spawn path goes through.
+            ci.cancel();
+        }
     }
 }
