@@ -36,8 +36,6 @@ import org.jetbrains.annotations.Nullable;
 import org.taumc.celeritas.interfaces.IRenderTargetExt;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.opengl.GL30;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -147,7 +145,6 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private BlendModeOverride vintageWeatherBlendOverride;
     private List<BufferBlendOverride> vintageWeatherBufferBlendOverrides = Collections.emptyList();
     private WorldRenderingPhase vintageWeatherPreviousPhase;
-    private int vintageWeatherLogCount;
 
     private Program vintageSkyBasicProgram;
     private GlFramebuffer vintageSkyBasicFramebuffer;
@@ -660,25 +657,11 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         }
         try {
             int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
-            String vertexSource = source.getSourceNullable(ShaderType.VERTEX);
-            String fragmentSource = source.getSourceNullable(ShaderType.FRAGMENT);
-            // TEMP DIAGNOSTIC (revert after rain diagnosis): prove rasterization.
-            if (fragmentSource != null && fragmentSource.contains("gl_FragData[0] = color;")) {
-                fragmentSource = fragmentSource.replace("gl_FragData[0] = color;",
-                        "gl_FragData[0] = vec4(1.0, 0.0, 0.0, 1.0);");
-                IRIS_LOGGER.warn("[TEMP-DIAG] Weather tint override active.");
-            }
-            // TEMP DIAGNOSTIC: map every rain quad to a full-screen red flash.
-            if (vertexSource != null && vertexSource.contains("gl_Position = gl_ProjectionMatrix * gbufferModelView * position;")) {
-                vertexSource = vertexSource.replace("gl_Position = gl_ProjectionMatrix * gbufferModelView * position;",
-                        "gl_Position = vec4(gl_Vertex.x > 0.0 ? 1.0 : -1.0, gl_Vertex.y > 0.0 ? 1.0 : -1.0, 0.5, 1.0);");
-                IRIS_LOGGER.warn("[TEMP-DIAG] Weather fullscreen probe active.");
-            }
             ProgramBuilder builder = ProgramBuilder.begin(
                     source.getName() + "_celeritas_weather",
-                    vertexSource,
+                    source.getSourceNullable(ShaderType.VERTEX),
                     source.getSourceNullable(ShaderType.GEOMETRY),
-                    fragmentSource,
+                    source.getSourceNullable(ShaderType.FRAGMENT),
                     IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
             CommonUniforms.addCommonUniforms(builder, this.pack.getIdMap(), this.packDirectives, this.updateNotifier, FogMode.PER_VERTEX);
             this.customUniforms.assignTo(builder);
@@ -707,19 +690,11 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         // before translucent/weather gbuffer geometry, otherwise packs overwrite
         // depthless rain pixels with sky color.
         this.beginTranslucents();
-        if (this.vintageWeatherLogCount < 3) {
-            this.vintageWeatherLogCount++;
-            IRIS_LOGGER.warn("[TEMP-DIAG] Weather bridge engaged x{} (deferred ran before rain).", this.vintageWeatherLogCount);
-        }
         this.vintageWeatherPreviousPhase = this.getPhase();
         this.vintageWeatherFramebuffer.bind();
         this.setPhase(WorldRenderingPhase.RAIN_SNOW);
         GbufferPrograms.runPhaseChangeNotifier();
         this.celeritas$applyBlendOverrides(this.vintageWeatherBlendOverride, this.vintageWeatherBufferBlendOverrides);
-        // TEMP DIAGNOSTIC (revert with the tint): remove blend and depth culling
-        // so red quads are visible whenever geometry reaches rasterization.
-        GlStateManager.disableBlend();
-        GlStateManager.depthFunc(GL11.GL_ALWAYS);
         this.vintageWeatherProgram.use();
         this.customUniforms.push(this.vintageWeatherProgram);
         this.celeritas$pushIdentityUnitZeroTextureMatrix();
@@ -728,37 +703,6 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     }
 
     public void endVintageWeatherRendering() {
-        if (this.vintageWeatherLogCount < 4) {
-            this.vintageWeatherLogCount++;
-            // TEMP DIAGNOSTIC: our own fullscreen red quad through the active
-            // bridge program/state, bypassing vanilla's vertex buffer entirely.
-            GL11.glBegin(GL11.GL_QUADS);
-            GL11.glVertex2f(-1.0f, -1.0f);
-            GL11.glVertex2f(1.0f, -1.0f);
-            GL11.glVertex2f(1.0f, 1.0f);
-            GL11.glVertex2f(-1.0f, 1.0f);
-            GL11.glEnd();
-            int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-            int drawFbo = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
-            java.nio.ByteBuffer cmBuf = java.nio.ByteBuffer.allocateDirect(4).order(java.nio.ByteOrder.nativeOrder());
-            GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, cmBuf);
-            byte[] cm = new byte[4];
-            cmBuf.get(cm);
-            boolean scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
-            int[] vp = new int[4];
-            java.nio.IntBuffer vpBuf = java.nio.ByteBuffer.allocateDirect(16)
-                    .order(java.nio.ByteOrder.nativeOrder()).asIntBuffer();
-            GL11.glGetInteger(GL11.GL_VIEWPORT, vpBuf);
-            vpBuf.get(vp);
-            IRIS_LOGGER.warn("[TEMP-DIAG] Weather probe: program={} drawFbo={} colorMask={} scissor={} vp={}x{}+{}+{}.",
-                    program, drawFbo, cm[0] + cm[1] * 2 + cm[2] * 4 + cm[3] * 8, scissor, vp[2], vp[3], vp[0], vp[1]);
-            GlStateManager.enableBlend();
-            GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA,
-                    GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE,
-                    GlStateManager.DestFactor.ZERO);
-            GlStateManager.depthFunc(GL11.GL_LEQUAL);
-            IRIS_LOGGER.warn("[TEMP-DIAG] Weather bridge finished.");
-        }
         Program.unbind();
         this.celeritas$popUnitZeroTextureMatrix();
         this.celeritas$restoreBlendOverrides(this.vintageWeatherBlendOverride, this.vintageWeatherBufferBlendOverrides);

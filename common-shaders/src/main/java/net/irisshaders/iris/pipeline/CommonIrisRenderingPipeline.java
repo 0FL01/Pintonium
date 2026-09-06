@@ -120,7 +120,6 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
     protected final ImmutableSet<Integer> flippedAfterTranslucent;
     public boolean isBeforeTranslucent;
     private boolean celeritas$deferredStageDone;
-    private int celeritas$deferredLogCount;
     protected final Supplier<ShadowRenderTargets> shadowTargetsSupplier;
     protected final int shadowMapResolution;
     protected final PackShadowDirectives shadowDirectives;
@@ -440,10 +439,6 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
             return;
         }
         this.celeritas$deferredStageDone = true;
-        if (this.celeritas$deferredLogCount < 3) {
-            this.celeritas$deferredLogCount++;
-            IRIS_LOGGER.warn("[TEMP-DIAG] Deferred stage fired x{}.", this.celeritas$deferredLogCount);
-        }
 
         removePhaseIfNeeded();
 
