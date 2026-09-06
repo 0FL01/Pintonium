@@ -119,6 +119,8 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
     protected final ImmutableSet<Integer> flippedAfterPrepare;
     protected final ImmutableSet<Integer> flippedAfterTranslucent;
     public boolean isBeforeTranslucent;
+    private boolean celeritas$deferredStageDone;
+    private int celeritas$deferredLogCount;
     protected final Supplier<ShadowRenderTargets> shadowTargetsSupplier;
     protected final int shadowMapResolution;
     protected final PackShadowDirectives shadowDirectives;
@@ -434,6 +436,15 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
             throw new IllegalStateException("Tried to use a destroyed world rendering pipeline");
         }
 
+        if (this.celeritas$deferredStageDone) {
+            return;
+        }
+        this.celeritas$deferredStageDone = true;
+        if (this.celeritas$deferredLogCount < 3) {
+            this.celeritas$deferredLogCount++;
+            IRIS_LOGGER.warn("[TEMP-DIAG] Deferred stage fired x{}.", this.celeritas$deferredLogCount);
+        }
+
         removePhaseIfNeeded();
 
         isBeforeTranslucent = false;
@@ -462,6 +473,7 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
     @Override
     public void beginLevelRendering() {
         isRenderingWorld = true;
+        this.celeritas$deferredStageDone = false;
 
         if (blockIdsNeedPopulation) {
             MINECRAFT_SHIM.populateBlockIds(pack);

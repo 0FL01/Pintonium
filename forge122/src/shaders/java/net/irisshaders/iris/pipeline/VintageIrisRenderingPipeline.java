@@ -703,9 +703,13 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         if (this.vintageWeatherProgram == null) {
             return false;
         }
+        // OptiFine ordering: the deferred stage (depth-keyed skyfill etc.) must run
+        // before translucent/weather gbuffer geometry, otherwise packs overwrite
+        // depthless rain pixels with sky color.
+        this.beginTranslucents();
         if (this.vintageWeatherLogCount < 3) {
             this.vintageWeatherLogCount++;
-            IRIS_LOGGER.warn("[TEMP-DIAG] Weather bridge engaged x{}.", this.vintageWeatherLogCount);
+            IRIS_LOGGER.warn("[TEMP-DIAG] Weather bridge engaged x{} (deferred ran before rain).", this.vintageWeatherLogCount);
         }
         this.vintageWeatherPreviousPhase = this.getPhase();
         this.vintageWeatherFramebuffer.bind();
