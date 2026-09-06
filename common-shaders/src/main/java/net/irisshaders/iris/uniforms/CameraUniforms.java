@@ -23,6 +23,10 @@ public class CameraUniforms {
 		uniforms
 			.uniform1f(ONCE, "near", () -> 0.05)
 			.uniform1f(PER_FRAME, "far", CameraUniforms::getRenderDistanceInBlocks)
+			// Packs such as Complementary place their border fog wall using
+			// renderDistance; without it the uniform stays 0 and the fog math
+			// divides by zero, so the void at the loaded-chunk edge stays visible.
+			.uniform1f(PER_FRAME, "renderDistance", CameraUniforms::getRenderDistanceInBlocks)
 			.uniform3d(PER_FRAME, "cameraPosition", tracker::getCurrentCameraPosition)
 			.uniform1f(PER_FRAME, "eyeAltitude", tracker::getCurrentCameraPositionY)
 			.uniform3d(PER_FRAME, "previousCameraPosition", tracker::getPreviousCameraPosition)
