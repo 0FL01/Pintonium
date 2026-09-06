@@ -145,6 +145,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private BlendModeOverride vintageWeatherBlendOverride;
     private List<BufferBlendOverride> vintageWeatherBufferBlendOverrides = Collections.emptyList();
     private WorldRenderingPhase vintageWeatherPreviousPhase;
+    private int vintageWeatherLogCount;
 
     private Program vintageSkyBasicProgram;
     private GlFramebuffer vintageSkyBasicFramebuffer;
@@ -693,6 +694,10 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     public boolean beginVintageWeatherRendering() {
         if (this.vintageWeatherProgram == null) {
             return false;
+        }
+        if (this.vintageWeatherLogCount < 3) {
+            this.vintageWeatherLogCount++;
+            IRIS_LOGGER.warn("[TEMP-DIAG] Weather bridge engaged x{}.", this.vintageWeatherLogCount);
         }
         this.vintageWeatherPreviousPhase = this.getPhase();
         this.vintageWeatherFramebuffer.bind();
