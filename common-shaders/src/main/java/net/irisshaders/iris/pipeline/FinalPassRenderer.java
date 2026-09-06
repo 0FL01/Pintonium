@@ -5,6 +5,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import static net.irisshaders.iris.IrisLogging.IRIS_LOGGER;
 import static com.mitchej123.glsm.GLStateManagerService.GL_STATE_MANAGER;
 import static com.mitchej123.glsm.RenderSystemService.RENDER_SYSTEM;
 import static org.embeddedt.embeddium.compat.mc.MinecraftVersionShimService.MINECRAFT_SHIM;
@@ -41,6 +42,7 @@ import net.irisshaders.iris.shadows.ShadowRenderTargets;
 import net.irisshaders.iris.targets.RenderTarget;
 import net.irisshaders.iris.targets.RenderTargets;
 import net.irisshaders.iris.uniforms.CommonUniforms;
+import net.irisshaders.iris.uniforms.CapturedRenderingState;
 import net.irisshaders.iris.uniforms.FrameUpdateNotifier;
 import net.irisshaders.iris.uniforms.custom.CustomUniforms;
 import org.embeddedt.embeddium.impl.gl.debug.GLDebug;
@@ -70,6 +72,8 @@ public class FinalPassRenderer {
 	// recreated on reload, so one sweep per lifetime is equivalent (see
 	// CompositeRenderer.didInitialUnbindSweep).
 	private boolean didInitialUnbindSweep;
+	// TEMP diagnostics: throttled final-frame color probe. Remove after use.
+	private long lastDiagnosticProbeNanos;
 
 	// TODO: The length of this argument list is getting a bit ridiculous
 	public FinalPassRenderer(WorldRenderingPipeline pipeline, ProgramSet pack, RenderTargets renderTargets, TextureAccess noiseTexture, ShaderStorageBufferHolder holder,
@@ -308,6 +312,26 @@ public class FinalPassRenderer {
 		}
 
 		RENDER_SYSTEM.glActiveTexture(GL15C.GL_TEXTURE0);
+
+		// TEMP diagnostics: throttled probe of captured fog color and final-frame
+		// pixels (25%, 50%, 75% height at screen center). Remove after use.
+		if (IrisCommon.getIrisConfig().areDebugOptionsEnabled()) {
+			long now = System.nanoTime();
+			if (now - lastDiagnosticProbeNanos > 2_000_000_000L) {
+				lastDiagnosticProbeNanos = now;
+				org.joml.Vector3d fogColor3 = CapturedRenderingState.INSTANCE.getFogColor();
+				StringBuilder samples = new StringBuilder();
+				int[] viewport = new int[4];
+				GL11C.glGetIntegerv(GL11C.GL_VIEWPORT, viewport);
+				for (int row = 1; row <= 3; row++) {
+					float[] pixel = new float[4];
+					GL11C.glReadPixels(viewport[0] + viewport[2] / 2, viewport[1] + viewport[3] * row / 4,
+							1, 1, GL11C.GL_RGBA, GL11C.GL_FLOAT, pixel);
+					samples.append(String.format(" y%.2f=(%.2f,%.2f,%.2f)", 0.25 * row, pixel[0], pixel[1], pixel[2]));
+				}
+				IRIS_LOGGER.info("[FogDiag] fogColor=({}, {}, {}) final{}", fogColor3.x, fogColor3.y, fogColor3.z, samples);
+			}
+		}
 	}
 
 	public void recalculateSwapPassSize() {
