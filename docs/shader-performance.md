@@ -17,6 +17,27 @@ reported. FXAA was audited and needs no action: `FXAA(` is never invoked in
 any pack program. Bloom and DOF confirmed off (`BLOOM_ENABLED=-1` gates the
 working bloom code, `WORLD_BLUR=0`).
 
+## Sky bridge: sun/moon/gradient/stars through pack programs
+
+Vanilla `renderSky` drew the gradient, sun square, moon and stars with fixed
+function; the pack's `gbuffers_skybasic/skytextured` never ran. New explicit
+bridge mirrors the weather bridge: `ProgramId.SkyBasic/SkyTextured` resolve,
+own `flippedAfterPrepare` framebuffers from source draw buffers, phase SKY,
+blend overrides, state restoration. A RenderGlobal mixin routes the three
+`Tessellator.draw` calls (gradient→basic, sun/moon→textured) and the
+untextured VBO/display-list boxes through SkyBasic, and skips vanilla star
+points/lists while the bridge is active because the pack draws its own stars.
+Anything else, or a pack without sky programs, keeps vanilla behavior.
+
+Sun/moon detection uses the pack's own OptiFine heuristic (texture size plus
+sun side), which holds because our sun vector is already correct. Moon phases
+and rain fade come from pack code for free.
+
+Verification: package build, remap check of the new mixin hooks, triangle
+regression. Requires a full restart and day/night/rain screenshot comparison:
+procedural sun disc with glow and no white square, phased moon, pack stars,
+then Chocapic as the fallback control.
+
 ## Leaf shadow optimisation (options only, no code)
 
 `LEAF_SHADOW_OPTIMISATION_DEFINE=-1→1`. In `leaves.glsl` this swaps the

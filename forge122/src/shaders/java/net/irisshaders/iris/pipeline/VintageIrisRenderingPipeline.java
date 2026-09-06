@@ -145,6 +145,16 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
     private List<BufferBlendOverride> vintageWeatherBufferBlendOverrides = Collections.emptyList();
     private WorldRenderingPhase vintageWeatherPreviousPhase;
 
+    private Program vintageSkyBasicProgram;
+    private GlFramebuffer vintageSkyBasicFramebuffer;
+    private BlendModeOverride vintageSkyBasicBlendOverride;
+    private List<BufferBlendOverride> vintageSkyBasicBufferBlendOverrides = Collections.emptyList();
+    private Program vintageSkyTexturedProgram;
+    private GlFramebuffer vintageSkyTexturedFramebuffer;
+    private BlendModeOverride vintageSkyTexturedBlendOverride;
+    private List<BufferBlendOverride> vintageSkyTexturedBufferBlendOverrides = Collections.emptyList();
+    private WorldRenderingPhase vintageSkyPreviousPhase;
+
     public VintageIrisRenderingPipeline(ProgramSet programSet) {
         super(programSet);
         MINECRAFT_SHIM.populateBlockIds(this.pack);
@@ -157,6 +167,7 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         this.createVintageHandCompatibilityProgram();
         this.createVintageLineProgram();
         this.createVintageWeatherProgram();
+        this.createVintageSkyPrograms();
         this.createVintageArmorGlintProgram();
         this.vintageEntityFallbackFramebuffer = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, new int[] {0});
     }
@@ -689,6 +700,91 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         Program.unbind();
         this.celeritas$restoreBlendOverrides(this.vintageWeatherBlendOverride, this.vintageWeatherBufferBlendOverrides);
         this.setPhase(this.vintageWeatherPreviousPhase);
+        GbufferPrograms.runPhaseChangeNotifier();
+        this.bindDefault();
+    }
+
+    private void createVintageSkyPrograms() {
+        this.vintageSkyBasicProgram = this.celeritas$createSkyProgram(ProgramId.SkyBasic, true);
+        this.vintageSkyTexturedProgram = this.celeritas$createSkyProgram(ProgramId.SkyTextured, false);
+    }
+
+    private Program celeritas$createSkyProgram(ProgramId programId, boolean basic) {
+        ProgramSource source = this.resolver.resolve(programId).orElse(null);
+        if (source == null || !source.isValid()) {
+            return null;
+        }
+        try {
+            int[] drawBuffers = this.celeritas$drawBuffersOrDefault(source);
+            ProgramBuilder builder = ProgramBuilder.begin(
+                    source.getName() + "_celeritas_sky",
+                    source.getSourceNullable(ShaderType.VERTEX),
+                    source.getSourceNullable(ShaderType.GEOMETRY),
+                    source.getSourceNullable(ShaderType.FRAGMENT),
+                    IrisSamplers.WORLD_RESERVED_TEXTURE_UNITS);
+            CommonUniforms.addCommonUniforms(builder, this.pack.getIdMap(), this.packDirectives, this.updateNotifier, FogMode.PER_VERTEX);
+            this.customUniforms.assignTo(builder);
+            this.addGbufferOrShadowSamplers(builder, builder, () -> this.flippedAfterPrepare,
+                    false, true, true, false);
+            Program program = builder.build();
+            this.customUniforms.mapholderToPass(builder, program);
+            if (basic) {
+                this.vintageSkyBasicFramebuffer = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, drawBuffers);
+                this.vintageSkyBasicBlendOverride = source.getDirectives().getBlendModeOverride().orElse(programId.getBlendModeOverride());
+                this.vintageSkyBasicBufferBlendOverrides = this.celeritas$createBufferBlendOverrides(source, drawBuffers);
+            } else {
+                this.vintageSkyTexturedFramebuffer = this.renderTargets.createGbufferFramebuffer(this.flippedAfterPrepare, drawBuffers);
+                this.vintageSkyTexturedBlendOverride = source.getDirectives().getBlendModeOverride().orElse(programId.getBlendModeOverride());
+                this.vintageSkyTexturedBufferBlendOverrides = this.celeritas$createBufferBlendOverrides(source, drawBuffers);
+            }
+            IRIS_LOGGER.info("Using shader pack sky program {} with draw buffers {}", source.getName(), java.util.Arrays.toString(drawBuffers));
+            return program;
+        } catch (RuntimeException e) {
+            IRIS_LOGGER.warn("Failed to create the 1.12 sky shader bridge.", e);
+            return null;
+        }
+    }
+
+    public boolean beginVintageSkyBasic() {
+        if (this.vintageSkyBasicProgram == null) {
+            return false;
+        }
+        this.vintageSkyPreviousPhase = this.getPhase();
+        this.vintageSkyBasicFramebuffer.bind();
+        this.setPhase(WorldRenderingPhase.SKY);
+        GbufferPrograms.runPhaseChangeNotifier();
+        this.celeritas$applyBlendOverrides(this.vintageSkyBasicBlendOverride, this.vintageSkyBasicBufferBlendOverrides);
+        this.vintageSkyBasicProgram.use();
+        this.customUniforms.push(this.vintageSkyBasicProgram);
+        return true;
+    }
+
+    public void endVintageSkyBasic() {
+        Program.unbind();
+        this.celeritas$restoreBlendOverrides(this.vintageSkyBasicBlendOverride, this.vintageSkyBasicBufferBlendOverrides);
+        this.setPhase(this.vintageSkyPreviousPhase);
+        GbufferPrograms.runPhaseChangeNotifier();
+        this.bindDefault();
+    }
+
+    public boolean beginVintageSkyTextured() {
+        if (this.vintageSkyTexturedProgram == null) {
+            return false;
+        }
+        this.vintageSkyPreviousPhase = this.getPhase();
+        this.vintageSkyTexturedFramebuffer.bind();
+        this.setPhase(WorldRenderingPhase.SKY);
+        GbufferPrograms.runPhaseChangeNotifier();
+        this.celeritas$applyBlendOverrides(this.vintageSkyTexturedBlendOverride, this.vintageSkyTexturedBufferBlendOverrides);
+        this.vintageSkyTexturedProgram.use();
+        this.customUniforms.push(this.vintageSkyTexturedProgram);
+        return true;
+    }
+
+    public void endVintageSkyTextured() {
+        Program.unbind();
+        this.celeritas$restoreBlendOverrides(this.vintageSkyTexturedBlendOverride, this.vintageSkyTexturedBufferBlendOverrides);
+        this.setPhase(this.vintageSkyPreviousPhase);
         GbufferPrograms.runPhaseChangeNotifier();
         this.bindDefault();
     }
@@ -1455,6 +1551,14 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         if (this.vintageWeatherProgram != null) {
             this.vintageWeatherProgram.delete();
             this.vintageWeatherProgram = null;
+        }
+        if (this.vintageSkyBasicProgram != null) {
+            this.vintageSkyBasicProgram.delete();
+            this.vintageSkyBasicProgram = null;
+        }
+        if (this.vintageSkyTexturedProgram != null) {
+            this.vintageSkyTexturedProgram.delete();
+            this.vintageSkyTexturedProgram = null;
         }
         if (this.vintageArmorGlintProgram != null) {
             this.vintageArmorGlintProgram.delete();
