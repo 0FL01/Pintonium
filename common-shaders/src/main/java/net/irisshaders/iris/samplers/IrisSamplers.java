@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import net.irisshaders.iris.IrisConstants;
 import net.irisshaders.iris.gl.image.GlImage;
 import net.irisshaders.iris.gl.sampler.GlSampler;
+import net.irisshaders.iris.gl.sampler.SamplerBinding;
 import net.irisshaders.iris.gl.sampler.SamplerHolder;
 import net.irisshaders.iris.gl.state.StateUpdateNotifiers;
 import net.irisshaders.iris.gl.texture.TextureAccess;
@@ -57,14 +58,18 @@ public class IrisSamplers {
 		for (int i = startIndex; i < renderTargets.getRenderTargetCount(); i++) {
 			final int index = i;
 
-			IntSupplier texture = () -> {
-				ImmutableSet<Integer> flippedBuffers = flipped.get();
-				RenderTarget target = renderTargets.getOrCreate(index);
+			IntSupplier texture = new SamplerBinding.PreparedTexture() {
+				@Override
+				public void prepare() {
+					if (!flipped.get().contains(index)) {
+						renderTargets.getOrCreate(index).prepareMainSampling();
+					}
+				}
 
-				if (flippedBuffers.contains(index)) {
-					return target.getAltTexture();
-				} else {
-					return target.getMainTexture();
+				@Override
+				public int getAsInt() {
+					RenderTarget target = renderTargets.getOrCreate(index);
+					return flipped.get().contains(index) ? target.getAltTexture() : target.getMainTextureForSampling();
 				}
 			};
 

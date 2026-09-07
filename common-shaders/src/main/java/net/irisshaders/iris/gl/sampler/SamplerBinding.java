@@ -7,6 +7,15 @@ import net.irisshaders.iris.gl.texture.TextureType;
 import java.util.function.IntSupplier;
 
 public class SamplerBinding {
+	/** Resource preparation must finish before any sampler of the program is bound. */
+	public interface PreparedTexture extends IntSupplier {
+		void prepare();
+	}
+
+	public void prepare() {
+		if (texture instanceof PreparedTexture prepared) prepared.prepare();
+	}
+
 	private final int textureUnit;
 	private final IntSupplier texture;
 	private final ValueUpdateNotifier notifier;

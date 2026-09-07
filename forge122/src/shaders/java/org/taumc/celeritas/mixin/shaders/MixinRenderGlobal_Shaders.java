@@ -1,5 +1,10 @@
 package org.taumc.celeritas.mixin.shaders;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import net.irisshaders.iris.pipeline.GpuProfiler;
+import net.minecraft.client.renderer.culling.ICamera;
+
 import net.irisshaders.iris.IrisCommon;
 import net.irisshaders.iris.compat.dh.DHCompat;
 import net.irisshaders.iris.pipeline.CommonIrisRenderingPipeline;
@@ -20,6 +25,20 @@ import org.taumc.celeritas.impl.compat.distanthorizons.DhRenderStateSnapshot;
 
 @Mixin(RenderGlobal.class)
 public class MixinRenderGlobal_Shaders {
+    @WrapMethod(method = "renderEntities")
+    private void iris$profileEntities(Entity view, ICamera camera, float ticks, Operation<Void> original) {
+        int timer = GpuProfiler.begin(org.taumc.celeritas.impl.render.GlMatrixSnapshot.isRenderingShadowPass()
+                ? "shadows/entities-and-blockentities-inclusive"
+                : net.minecraftforge.client.MinecraftForgeClient.getRenderPass() == 0
+                ? "gbuffer/entities-and-blockentities/pass0-inclusive"
+                : "gbuffer/entities-and-blockentities/pass1-or-other-inclusive");
+        try {
+            original.call(view, camera, ticks);
+        } finally {
+            GpuProfiler.end(timer);
+        }
+    }
+
     @Unique
     private boolean celeritas$selectionOutlineShaderBridgeActive;
 

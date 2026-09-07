@@ -27,6 +27,7 @@ public final class Program extends GlObject {
 
 	public void use() {
 		IrisRenderSystem.memoryBarrier(GL43C.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL43C.GL_TEXTURE_FETCH_BARRIER_BIT | GL43C.GL_SHADER_STORAGE_BARRIER_BIT);
+		samplers.prepare();
 		GL_STATE_MANAGER.glUseProgram(handle());
 
 		uniforms.update();
@@ -41,6 +42,7 @@ public final class Program extends GlObject {
 	 * switch programs in between).
 	 */
 	public void useAlreadyBound() {
+		samplers.prepare();
 		uniforms.update();
 		samplers.update();
 		images.update();

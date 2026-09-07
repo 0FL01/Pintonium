@@ -696,7 +696,12 @@ public class VintageIrisRenderingPipeline extends CommonIrisRenderingPipeline {
         // OptiFine ordering: the deferred stage (depth-keyed skyfill etc.) must run
         // before translucent/weather gbuffer geometry, otherwise packs overwrite
         // depthless rain pixels with sky color.
-        this.beginTranslucents();
+        int transitionTimer = GpuProfiler.begin("weather/deferred-transition-inclusive");
+        try {
+            this.beginTranslucents();
+        } finally {
+            GpuProfiler.end(transitionTimer);
+        }
         this.vintageWeatherPreviousPhase = this.getPhase();
         this.vintageWeatherFramebuffer.bind();
         this.setPhase(WorldRenderingPhase.RAIN_SNOW);

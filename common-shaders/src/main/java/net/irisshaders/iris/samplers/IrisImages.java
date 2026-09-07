@@ -23,6 +23,9 @@ public class IrisImages {
 			if (!images.hasImage(name)) continue;
 
 			renderTargets.createIfUnsure(index);
+			// Even readonly declarations are not a proof of access for every linked user.
+			// Image/compute writes bypass framebuffer binding, so retain the copy fallback.
+			renderTargets.get(index).untrackedHistoryAccess();
 
 			// Note: image bindings *are* impacted by buffer flips.
 			IntSupplier textureID = () -> {

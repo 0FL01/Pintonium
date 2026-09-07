@@ -1,6 +1,9 @@
 package org.taumc.celeritas.mixin.shaders;
 
 import com.llamalad7.mixinextras.injector.WrapWithCondition;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import net.irisshaders.iris.pipeline.GpuProfiler;
 import net.irisshaders.iris.IrisConstants;
 import net.irisshaders.iris.compat.dh.DHCompat;
 import net.irisshaders.iris.IrisCommon;
@@ -27,6 +30,29 @@ import org.taumc.celeritas.impl.render.GlMatrixSnapshot;
 
 @Mixin(EntityRenderer.class)
 public class MixinEntityRenderer_Shaders {
+    @WrapMethod(method = "renderHand(FI)V")
+    private void iris$profileHand(float ticks, int pass, Operation<Void> original) {
+        int timer = GpuProfiler.begin("gbuffer/hand-inclusive");
+        try {
+            original.call(ticks, pass);
+        } finally {
+            GpuProfiler.end(timer);
+        }
+    }
+
+    @WrapMethod(method = "renderRainSnow(F)V")
+    private void iris$profileWeather(float ticks, Operation<Void> original) {
+        // The HEAD bridge can run deferred before vanilla even checks rain strength.
+        int timer = GpuProfiler.begin("weather/entry-with-deferred-inclusive");
+        try {
+            original.call(ticks);
+        } finally {
+            GpuProfiler.end(this.iris$weatherBodyTimer);
+            this.iris$weatherBodyTimer = -1;
+            GpuProfiler.end(timer);
+        }
+    }
+
     @Shadow
     public Minecraft mc;
 
@@ -38,6 +64,9 @@ public class MixinEntityRenderer_Shaders {
 
     @Unique
     private boolean iris$weatherBridgeActive;
+
+    @Unique
+    private int iris$weatherBodyTimer = -1;
 
     @Unique
     private GlMatrixSnapshot iris$gbufferMatrices;
@@ -172,10 +201,13 @@ public class MixinEntityRenderer_Shaders {
     private void iris$beginWeather(float partialTicks, CallbackInfo ci) {
         VintageIrisRenderingPipeline pipeline = this.iris$getVintagePipeline();
         this.iris$weatherBridgeActive = pipeline != null && pipeline.beginVintageWeatherRendering();
+        this.iris$weatherBodyTimer = GpuProfiler.begin("gbuffer/weather-body-inclusive");
     }
 
     @Inject(method = "renderRainSnow(F)V", at = @At("RETURN"))
     private void iris$endWeather(float partialTicks, CallbackInfo ci) {
+        GpuProfiler.end(this.iris$weatherBodyTimer);
+        this.iris$weatherBodyTimer = -1;
         if (this.iris$weatherBridgeActive) {
             VintageIrisRenderingPipeline pipeline = this.iris$getVintagePipeline();
             if (pipeline != null) {

@@ -238,11 +238,19 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
 
     @Override
     public void renderShadows(MCLevelRenderer worldRenderer, MCCamera playerCamera) {
+        GpuProfiler.end(gbufferTimer);
+        gbufferTimer = -1;
         if (shadowRenderer != null) {
-            this.shadowRenderer.renderShadows(worldRenderer, playerCamera);
+            int timer = GpuProfiler.begin("shadows/total-inclusive");
+            try {
+                this.shadowRenderer.renderShadows(worldRenderer, playerCamera);
+            } finally {
+                GpuProfiler.end(timer);
+            }
         }
 
         prepareRenderer.renderAll();
+        gbufferTimer = GpuProfiler.begin("gbuffer/after-prepare-before-deferred");
     }
 
     @Override
@@ -256,10 +264,13 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
 
     @Override
     public void finalizeLevelRendering() {
+        GpuProfiler.end(gbufferTimer);
+        gbufferTimer = -1;
         isRenderingWorld = false;
         removePhaseIfNeeded();
         compositeRenderer.renderAll();
         finalPassRenderer.renderFinalPass();
+        gpuProfiler.endFrame();
     }
 
     @Override
@@ -439,6 +450,8 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
             return;
         }
         this.celeritas$deferredStageDone = true;
+        GpuProfiler.end(gbufferTimer);
+        gbufferTimer = -1;
 
         removePhaseIfNeeded();
 
@@ -446,9 +459,22 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
 
         // We need to copy the current depth texture so that depthtex1 can contain the depth values for
         // all non-translucent content, as required.
-        renderTargets.copyPreTranslucentDepth();
+        // Live A/B found no copy or through-deferred benefit; keep the legacy path.
+        int transitionTimer = GpuProfiler.begin("depth/legacy-through-deferred");
+        try {
+            int strategyTimer = GpuProfiler.begin("depth/legacy");
+            int depthTimer = GpuProfiler.begin("depth/pre-translucent-copy");
+            try {
+                renderTargets.copyPreTranslucentDepth();
+            } finally {
+                GpuProfiler.end(depthTimer);
+                GpuProfiler.end(strategyTimer);
+            }
 
-        deferredRenderer.renderAll();
+            deferredRenderer.renderAll();
+        } finally {
+            GpuProfiler.end(transitionTimer);
+        }
 
         RENDER_SYSTEM.enableBlend();
 
@@ -463,10 +489,15 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
 
         // Reset shader or whatever...
         RENDER_SYSTEM.setPositionShader();
+        gbufferTimer = GpuProfiler.begin("gbuffer/after-deferred-before-composite");
     }
+
+    private final GpuProfiler gpuProfiler = new GpuProfiler();
+    private int gbufferTimer = -1;
 
     @Override
     public void beginLevelRendering() {
+        gpuProfiler.beginFrame();
         isRenderingWorld = true;
         this.celeritas$deferredStageDone = false;
 
@@ -620,6 +651,7 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
         isBeforeTranslucent = true;
 
         beginRenderer.renderAll();
+        gbufferTimer = GpuProfiler.begin("gbuffer/after-begin-before-shadows");
 
         setPhase(WorldRenderingPhase.SKY);
 
@@ -1206,6 +1238,7 @@ public abstract class CommonIrisRenderingPipeline implements WorldRenderingPipel
 
     @Override
     public void destroy() {
+        gpuProfiler.destroy();
         destroyed = true;
 
         destroyShaders();

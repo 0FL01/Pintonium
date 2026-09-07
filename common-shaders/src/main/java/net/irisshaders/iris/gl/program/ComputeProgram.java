@@ -65,6 +65,7 @@ public final class ComputeProgram extends GlObject {
 	}
 
 	public void use() {
+		samplers.prepare();
 		GL_STATE_MANAGER.glUseProgram(handle());
 
 		uniforms.update();

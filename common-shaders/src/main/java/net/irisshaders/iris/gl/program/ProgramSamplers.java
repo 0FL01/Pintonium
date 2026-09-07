@@ -80,6 +80,10 @@ public class ProgramSamplers {
 		RENDER_SYSTEM.glActiveTexture(GL20C.GL_TEXTURE0 + activeTexture);
 	}
 
+	public void prepare() {
+		for (SamplerBinding binding : samplerBindings) binding.prepare();
+	}
+
 	public void removeListeners() {
 		active = null;
 

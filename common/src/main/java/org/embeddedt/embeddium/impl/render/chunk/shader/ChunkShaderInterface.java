@@ -8,6 +8,8 @@ public interface ChunkShaderInterface {
     void setupState(TerrainRenderPass pass);
     default void restoreState() {}
     GlPrimitiveType getPrimitiveType();
+    default boolean supportsDrawCoalescing() { return false; }
+    default boolean useDrawCoalescing(TerrainRenderPass pass) { return false; }
     void setProjectionMatrix(Matrix4fc matrix);
     void setModelViewMatrix(Matrix4fc matrix);
     void setRegionOffset(float x, float y, float z);

@@ -60,16 +60,14 @@ public class RenderTargets {
 		// data. Otherwise very weird things can happen.
 		fullClearRequired = true;
 
-		this.depthSourceFb = createFramebufferWritingToMain(new int[]{0});
+		this.depthSourceFb = createDepthFramebuffer(currentDepthTexture);
 
 		this.noTranslucents = new DepthTexture("depthtex1", width, height, currentDepthFormat);
 		this.noHand = new DepthTexture("dephtex2", width, height, currentDepthFormat);
 
-		this.noTranslucentsDestFb = createFramebufferWritingToMain(new int[]{0});
-		this.noTranslucentsDestFb.addDepthAttachment(this.noTranslucents.getTextureId());
+		this.noTranslucentsDestFb = createDepthFramebuffer(this.noTranslucents.getTextureId());
 
-		this.noHandDestFb = createFramebufferWritingToMain(new int[]{0});
-		this.noHandDestFb.addDepthAttachment(this.noHand.getTextureId());
+		this.noHandDestFb = createDepthFramebuffer(this.noHand.getTextureId());
 
 		this.translucentDepthDirty = true;
 		this.handDepthDirty = true;
@@ -243,6 +241,19 @@ public class RenderTargets {
 		return createFullFramebuffer(false, drawBuffers);
 	}
 
+	private GlFramebuffer createDepthFramebuffer(int texture) {
+		GlFramebuffer framebuffer = new GlFramebuffer();
+		ownedFramebuffers.add(framebuffer);
+		framebuffer.addDepthAttachment(texture);
+		framebuffer.noDrawBuffers();
+		IrisRenderSystem.readBuffer(framebuffer.getId(), GL30C.GL_NONE);
+		// No color attachment: depth copies must not materialize or export color history.
+		if (framebuffer.getStatus() != GL30C.GL_FRAMEBUFFER_COMPLETE) {
+			throw new IllegalStateException("Incomplete depth copy framebuffer");
+		}
+		return framebuffer;
+	}
+
 	public GlFramebuffer createFramebufferWritingToAlt(int[] drawBuffers) {
 		return createFullFramebuffer(true, drawBuffers);
 	}
@@ -278,6 +289,7 @@ public class RenderTargets {
 		// NB: Before OpenGL 3.0, all framebuffers are required to have a color
 		// attachment no matter what.
 		framebuffer.addColorAttachment(0, getOrCreate(0).getMainTexture());
+		trackHistoryWrites(framebuffer, new int[]{0});
 		framebuffer.noDrawBuffers();
 
 		return framebuffer;
@@ -362,6 +374,7 @@ public class RenderTargets {
 
 		framebuffer.drawBuffers(actualDrawBuffers);
 		framebuffer.readBuffer(0);
+		trackHistoryWrites(framebuffer, drawBuffers);
 
 
 		int status = framebuffer.getStatus();
@@ -370,6 +383,20 @@ public class RenderTargets {
 		}
 
 		return framebuffer;
+	}
+
+	private void trackHistoryWrites(GlFramebuffer framebuffer, int[] drawBuffers) {
+		RenderTarget[] states = new RenderTarget[drawBuffers.length];
+		for (int i = 0; i < drawBuffers.length; i++) {
+			states[i] = getOrCreate(drawBuffers[i]);
+		}
+		framebuffer.trackWrites(() -> {
+			for (RenderTarget target : states) target.beforeWrite();
+		}, () -> {
+			for (RenderTarget target : states) target.untrackedHistoryAccess();
+		}, () -> {
+			for (RenderTarget target : states) target.materializeHistory();
+		});
 	}
 
 	public void destroyFramebuffer(GlFramebuffer framebuffer) {

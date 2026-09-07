@@ -1,5 +1,22 @@
 # Forge122 shader performance
 
+## 2026-09-07 final cutout-only release
+
+Compatible CUTOUT now uses ordered adjacent draw coalescing permanently,
+independent of profiling. SOLID remains legacy: its isolated savings did not
+survive the translucent-inclusive comparison. Shadows, translucent, primitive
+restart, extra shader stages and unknown shader effects retain fallback; no
+shader quality or option changes are part of this release.
+
+Final 2x2 experiment: terrain-sum baseline 5.4168 ms versus cutout-only 5.0614 ms
+(-6.6%); cutout 1.761 to 1.523 ms with about 80% fewer subdraws. Workload imbalance
+and scene/driver specificity prohibit a whole-frame FPS claim. Automatic
+experiments are removed; debug profiling stays bounded and opt-in. Conservative
+history/mip tracking and depth-only FBO cleanup remain, but the broader resource
+graph is incomplete. Full evidence, fallbacks and verification are recorded in
+`goals/2026-09-07-shader-resource-graph.md`; historical option edits below are not
+new changes in this release.
+
 ## Live follow-up: 72 FPS / 13.8 ms, GPU 91%
 
 Same coastal scene family after all four iterations (POM off, water/clouds 1,

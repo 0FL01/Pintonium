@@ -15,6 +15,16 @@ public class GlFramebuffer extends GlObject {
 	private final int maxDrawBuffers;
 	private final int maxColorAttachments;
 	private boolean hasDepthAttachment;
+	private Runnable beforeDraw;
+	private Runnable onExport;
+	private Runnable beforeRead;
+
+	/** Conservative write tracking; binding is not evidence of a complete overwrite. */
+	public void trackWrites(Runnable beforeDraw, Runnable onExport, Runnable beforeRead) {
+		this.beforeDraw = beforeDraw;
+		this.onExport = onExport;
+		this.beforeRead = beforeRead;
+	}
 
 	public GlFramebuffer() {
 		this.setHandle(IrisRenderSystem.createFramebuffer());
@@ -86,6 +96,7 @@ public class GlFramebuffer extends GlObject {
 	}
 
 	public int getColorAttachment(int index) {
+		if (onExport != null) onExport.run();
 		return attachments.get(index);
 	}
 
@@ -94,14 +105,17 @@ public class GlFramebuffer extends GlObject {
 	}
 
 	public void bind() {
+		if (beforeDraw != null) beforeDraw.run();
 		GL_STATE_MANAGER.glBindFramebuffer(GL30C.GL_FRAMEBUFFER, handle());
 	}
 
 	public void bindAsReadBuffer() {
+		if (beforeRead != null) beforeRead.run();
 		GL_STATE_MANAGER.glBindFramebuffer(GL30C.GL_READ_FRAMEBUFFER, handle());
 	}
 
 	public void bindAsDrawBuffer() {
+		if (beforeDraw != null) beforeDraw.run();
 		GL_STATE_MANAGER.glBindFramebuffer(GL30C.GL_DRAW_FRAMEBUFFER, handle());
 	}
 
@@ -116,6 +130,8 @@ public class GlFramebuffer extends GlObject {
 	}
 
 	public int getId() {
+		// Callers may cache this handle and bypass all subsequent bind notifications.
+		if (onExport != null) onExport.run();
 		return handle();
 	}
 }

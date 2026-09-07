@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import static com.mitchej123.glsm.GLStateManagerService.GL_STATE_MANAGER;
 
 import net.irisshaders.iris.gl.IrisRenderSystem;
+import net.irisshaders.iris.pipeline.GpuProfiler;
 import net.irisshaders.iris.gl.texture.InternalTextureFormat;
 import net.irisshaders.iris.gl.texture.PixelFormat;
 import net.irisshaders.iris.gl.texture.PixelType;
@@ -24,6 +25,7 @@ public class RenderTarget {
 	private int width;
 	private int height;
 	private boolean isValid;
+	private final HistoryCopyState historyCopyState = new HistoryCopyState();
 
 	public RenderTarget(Builder builder) {
 		this.isValid = true;
@@ -79,6 +81,7 @@ public class RenderTarget {
 	// Package private, call CompositeRenderTargets#resizeIfNeeded instead.
 	void resize(int width, int height) {
 		requireValid();
+		historyCopyState.resized();
 
 		this.width = width;
 		this.height = height;
@@ -92,6 +95,48 @@ public class RenderTarget {
 		return internalFormat;
 	}
 
+	/** Publish alt as the owner of both logical level-zero versions until observed. */
+	public void publishHistory(Runnable copy) {
+		requireValid();
+		GpuProfiler.count(GpuProfiler.Count.HISTORY_PUBLISHES);
+		if (historyCopyState.hasUntrackedAccess()) GpuProfiler.count(GpuProfiler.Count.HISTORY_EAGER_PUBLISHES);
+		historyCopyState.publish(copy);
+	}
+
+	public void materializeHistory() {
+		historyCopyState.materialize();
+	}
+
+	public void beforeWrite() {
+		// Even a main-only write must preserve the other logical side for partial writes.
+		historyCopyState.mayWrite();
+	}
+
+	public void untrackedHistoryAccess() {
+		if (historyCopyState.isMainAliasedToAlt()) GpuProfiler.count(GpuProfiler.Count.HISTORY_UNTRACKED_FALLBACKS);
+		historyCopyState.untrackedAccess();
+	}
+
+	public int getMainTextureForSampling() {
+		prepareMainSampling();
+		if (historyCopyState.canSampleMainFromAlt()) GpuProfiler.count(GpuProfiler.Count.HISTORY_ALIAS_READS);
+		return historyCopyState.canSampleMainFromAlt() ? getAltTexture() : getMainTexture();
+	}
+
+	public void prepareMainSampling() {
+		// Before the first mipmap request both allocations have only level zero.
+		// Afterwards even texelFetch can observe distinct stale higher mip levels.
+		if (historyCopyState.isMainAliasedToAlt() && !historyCopyState.canSampleMainFromAlt())
+			GpuProfiler.count(GpuProfiler.Count.HISTORY_MIP_FALLBACKS);
+		historyCopyState.prepareMainSampling();
+	}
+
+	public void prepareMipmaps() {
+		if (historyCopyState.isMainAliasedToAlt()) GpuProfiler.count(GpuProfiler.Count.HISTORY_MIP_FALLBACKS);
+		historyCopyState.mipmapsRequested();
+	}
+
+	/** Allocation ID for attachments/descriptors/parameters; sampling must resolve history first. */
 	public int getMainTexture() {
 		requireValid();
 
@@ -114,6 +159,7 @@ public class RenderTarget {
 
 	public void destroy() {
 		requireValid();
+		historyCopyState.resized();
 		isValid = false;
 
 		GL_STATE_MANAGER.glDeleteTextures(new int[]{mainTexture, altTexture});

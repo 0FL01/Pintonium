@@ -50,6 +50,7 @@ import org.lwjgl.opengl.*;
 
 public class FinalPassRenderer {
 	private final RenderTargets renderTargets;
+	private final Map<ComputeProgram, String> computeNames = new java.util.IdentityHashMap<>();
 
 	@Nullable
 	private final Pass finalPass;
@@ -117,9 +118,8 @@ public class FinalPassRenderer {
 		this.lastColorTextureVersion = MINECRAFT_SHIM.getColorBufferVersion();
 		this.colorHolder.addColorAttachment(0, lastColorTextureId);
 
-		// TODO: We don't actually fully swap the content, we merely copy it from alt to main
-		// This works for the most part, but it's not perfect. A better approach would be creating secondary
-		// framebuffers for every other frame, but that would be a lot more complex...
+		// History copy preserves BOTH logical sides. Rotation alone would expose stale
+		// initial alt contents next frame, even if the previous frame ended on alt.
 		ImmutableList.Builder<SwapPass> swapPasses = ImmutableList.builder();
 
 		flippedBuffers.forEach((i) -> {
@@ -130,7 +130,14 @@ public class FinalPassRenderer {
 			}
 
 			SwapPass swap = new SwapPass();
+			swap.copy = () -> copyHistory(swap);
 			RenderTarget target1 = renderTargets.getOrCreate(target);
+			// Do not assume legacy pixel-transfer copy is a bitwise identity for
+			// floating, signed-normalized, integer, packed, or unsized formats.
+			switch (target1.getInternalFormat()) {
+				case R8, RG8, RGB8, RGBA8, R16, RG16, RGB16, RGBA16 -> { }
+				default -> target1.untrackedHistoryAccess();
+			}
 			swap.target = target;
 			swap.width = target1.getWidth();
 			swap.height = target1.getHeight();
@@ -149,6 +156,8 @@ public class FinalPassRenderer {
 
 	private static void setupMipmapping(RenderTarget target, boolean readFromAlt) {
 		if (target == null) return;
+		GpuProfiler.count(GpuProfiler.Count.MIP_REQUESTS);
+		target.prepareMipmaps();
 
 		int texture = readFromAlt ? target.getAltTexture() : target.getMainTexture();
 
@@ -163,7 +172,10 @@ public class FinalPassRenderer {
 		//
 		// Also note that this only applies to one of the two buffers in a render target buffer pair - making it
 		// unlikely that this issue occurs in practice with most shader packs.
+		GpuProfiler.count(GpuProfiler.Count.MIP_GENERATED);
+		int timer = GpuProfiler.begin("final/mipmap");
 		IrisRenderSystem.generateMipmaps(texture, GL20C.GL_TEXTURE_2D);
+		GpuProfiler.end(timer);
 
 		int filter = GL20C.GL_LINEAR_MIPMAP_LINEAR;
 		if (target.getInternalFormat().getPixelFormat().isInteger()) {
@@ -227,7 +239,9 @@ public class FinalPassRenderer {
 				if (computeProgram != null) {
 					computeProgram.use();
 					this.customUniforms.push(computeProgram);
+					int timer = GpuProfiler.begin(computeNames.get(computeProgram));
 					computeProgram.dispatch(baseWidth, baseHeight);
+					GpuProfiler.end(timer);
 				}
 			}
 
@@ -246,7 +260,9 @@ public class FinalPassRenderer {
 			// program is the identifier for final :shrug:
 			this.customUniforms.push(finalPass.program);
 
+			int timer = GpuProfiler.begin("final/draw");
 			FullScreenQuadRenderer.INSTANCE.renderQuad();
+			GpuProfiler.end(timer);
 
 			FullScreenQuadRenderer.INSTANCE.end();
             GLDebug.popGroup();
@@ -263,7 +279,9 @@ public class FinalPassRenderer {
 			// https://stackoverflow.com/a/23994979/18166885
 			this.baseline.bindAsReadBuffer();
 
+			int timer = GpuProfiler.begin("final/copy");
 			IrisRenderSystem.copyTexSubImage2D(MINECRAFT_SHIM.getColorTextureId(), GL11C.GL_TEXTURE_2D, 0, 0, 0, 0, 0, baseWidth, baseHeight);
+			GpuProfiler.end(timer);
 		}
 
 		RENDER_SYSTEM.glActiveTexture(GL15C.GL_TEXTURE0);
@@ -274,18 +292,7 @@ public class FinalPassRenderer {
 		}
 
 		for (SwapPass swapPass : swapPasses) {
-			// NB: We need to use bind(), not bindAsReadBuffer()... Previously we used bindAsReadBuffer() here which
-			//     broke TAA on many packs and on many drivers.
-			//
-			// Note that glCopyTexSubImage2D reads from the current GL_READ_BUFFER (given by glReadBuffer()) for the
-			// current framebuffer bound to GL_FRAMEBUFFER, but that is distinct from the current GL_READ_FRAMEBUFFER,
-			// which is what bindAsReadBuffer() binds.
-			//
-			// Also note that RenderTargets already calls readBuffer(0) for us.
-			swapPass.from.bind();
-
-			RENDER_SYSTEM.bindTexture(swapPass.targetTexture);
-			GL_STATE_MANAGER.glCopyTexSubImage2D(GL20C.GL_TEXTURE_2D, 0, 0, 0, 0, 0, swapPass.width, swapPass.height);
+			renderTargets.get(swapPass.target).publishHistory(swapPass.copy);
 		}
 
 		// Make sure to reset the viewport to how it was before... Otherwise weird issues could occur.
@@ -318,6 +325,28 @@ public class FinalPassRenderer {
 			swapPass.width = target.getWidth();
 			swapPass.height = target.getHeight();
 			swapPass.targetTexture = target.getMainTexture();
+		}
+	}
+
+	private static void copyHistory(SwapPass swap) {
+		GpuProfiler.count(GpuProfiler.Count.HISTORY_COPIES);
+		int timer = GpuProfiler.begin("history/materialize");
+		// Materialization can run before a draw or a sampler update. Preserve both
+		// framebuffer bindings and the current texture binding, including on failure.
+		int read = GL_STATE_MANAGER.glGetInteger(GL30C.GL_READ_FRAMEBUFFER_BINDING);
+		int draw = GL_STATE_MANAGER.glGetInteger(GL30C.GL_DRAW_FRAMEBUFFER_BINDING);
+		int texture = GL_STATE_MANAGER.getActiveBoundTexture();
+		try {
+			// Bind both targets as in the legacy final copy. Deliberately bypass the
+			// write hook: this private FBO is only the SOURCE of materialization.
+			GL_STATE_MANAGER.glBindFramebuffer(GL30C.GL_FRAMEBUFFER, swap.from.handle());
+			RENDER_SYSTEM.bindTexture(swap.targetTexture);
+			GL_STATE_MANAGER.glCopyTexSubImage2D(GL20C.GL_TEXTURE_2D, 0, 0, 0, 0, 0, swap.width, swap.height);
+		} finally {
+			RENDER_SYSTEM.bindTexture(texture);
+			GL_STATE_MANAGER.glBindFramebuffer(GL30C.GL_READ_FRAMEBUFFER, read);
+			GL_STATE_MANAGER.glBindFramebuffer(GL30C.GL_DRAW_FRAMEBUFFER, draw);
+			GpuProfiler.end(timer);
 		}
 	}
 
@@ -428,6 +457,7 @@ public class FinalPassRenderer {
 				centerDepthSampler.setUsage(builder.addDynamicSampler(centerDepthSampler::getCenterDepthTexture, "iris_centerDepthSmooth"));
 
 				programs[i] = builder.buildCompute();
+				computeNames.put(programs[i], "compute/" + source.getName());
 
 				this.customUniforms.mapholderToPass(builder, programs[i]);
 
@@ -458,6 +488,7 @@ public class FinalPassRenderer {
 	}
 
 	private static final class SwapPass {
+		Runnable copy;
 		public int target;
 		public int width;
 		public int height;

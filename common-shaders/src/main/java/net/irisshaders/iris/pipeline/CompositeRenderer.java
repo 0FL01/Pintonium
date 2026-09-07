@@ -1,5 +1,6 @@
 package net.irisshaders.iris.pipeline;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
@@ -48,15 +49,20 @@ import net.irisshaders.iris.uniforms.CommonUniforms;
 import net.irisshaders.iris.uniforms.FrameUpdateNotifier;
 import net.irisshaders.iris.uniforms.custom.CustomUniforms;
 import org.embeddedt.embeddium.impl.gl.shader.ShaderType;
+import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL15C;
 import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL30C;
+import org.lwjgl.opengl.GL31C;
+import org.lwjgl.opengl.GL42C;
 import org.lwjgl.opengl.GL43C;
 
 public class CompositeRenderer {
 	private final RenderTargets renderTargets;
 
 	private final ImmutableList<Pass> passes;
+	private final CompositeTextureVersions textureVersions = new CompositeTextureVersions();
+	private final Map<ComputeProgram, String> computeNames = new java.util.IdentityHashMap<>();
 	private final TextureAccess noiseTexture;
 	private final FrameUpdateNotifier updateNotifier;
 	private final CenterDepthSampler centerDepthSampler;
@@ -120,6 +126,8 @@ public class CompositeRenderer {
 			}
 
 			Pass pass = new Pass();
+			pass.name = source.getName();
+			pass.mipmapName = "mipmap/" + source.getName();
 			ProgramDirectives directives = source.getDirectives();
 
 			pass.program = createProgram(source, flipped, flippedAtLeastOnceSnapshot, shadowTargetsSupplier);
@@ -171,28 +179,66 @@ public class CompositeRenderer {
 		}
 
 		this.passes = passes.build();
+		for (Pass pass : this.passes) {
+			if (!(pass instanceof ComputeOnlyPass)) {
+				pass.unknownWrites = hasUnknownWrites(pass.program);
+				describeResources(pass);
+			}
+		}
 		this.flippedAtLeastOnceFinal = flippedAtLeastOnce.build();
 
 		GL_STATE_MANAGER.glBindFramebuffer(GL30C.GL_READ_FRAMEBUFFER, 0);
 	}
 
-	private static void setupMipmapping(net.irisshaders.iris.targets.RenderTarget target, boolean readFromAlt) {
-		if (target == null) return;
+	private void describeResources(Pass pass) {
+		var reads = new ArrayList<CompositeTextureVersions.Texture>();
+		var writes = new ArrayList<CompositeTextureVersions.Texture>();
+		for (int index : pass.mipmappedBuffers) {
+			RenderTarget target = renderTargets.get(index);
+			if (target != null) {
+				reads.add(CompositeTextureVersions.Texture.read(index, target.getMainTexture(), target.getAltTexture(), pass.stageReadsFromAlt.contains(index)));
+			}
+		}
+		for (int index : pass.drawBuffers) {
+			RenderTarget target = renderTargets.get(index);
+			writes.add(CompositeTextureVersions.Texture.write(index, target.getMainTexture(), target.getAltTexture(), pass.stageReadsFromAlt.contains(index)));
+		}
+		pass.resources = new CompositeTextureVersions.PassResources(reads, writes, pass.unknownWrites);
+	}
 
-		int texture = readFromAlt ? target.getAltTexture() : target.getMainTexture();
+	private static boolean hasUnknownWrites(Program program) {
+		// Without full linked-program reflection, do not assume a raster-only shader.
+		if (!GL.getCapabilities().OpenGL43) return true;
+		int id = program.getProgramId();
+		if (GL43C.glGetProgramInterfacei(id, GL43C.GL_SHADER_STORAGE_BLOCK, GL43C.GL_ACTIVE_RESOURCES) != 0) return true;
+		int uniforms = GL20C.glGetProgrami(id, GL20C.GL_ACTIVE_UNIFORMS);
+		for (int i = 0; i < uniforms; i++) {
+			int type = GL31C.glGetActiveUniformsi(id, i, GL31C.GL_UNIFORM_TYPE);
+			// The image types form a contiguous GL enum range, including signed/unsigned variants.
+			// Reflection cannot prove readonly access, so even readonly images invalidate trust.
+			if ((type >= GL42C.GL_IMAGE_1D && type <= GL42C.GL_UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY)
+				|| type == GL42C.GL_UNSIGNED_INT_ATOMIC_COUNTER) return true;
+		}
+		return false;
+	}
 
-		// TODO: Only generate the mipmap if a valid mipmap hasn't been generated or if we've written to the buffer
-		// (since the last mipmap was generated)
-		//
-		// NB: We leave mipmapping enabled even if the buffer is written to again, this appears to match the
-		// behavior of ShadersMod/OptiFine, however I'm not sure if it's desired behavior. It's possible that a
-		// program could use mipmapped sampling with a stale mipmap, which probably isn't great. However, the
-		// sampling mode is always reset between frames, so this only persists after the first program to use
-		// mipmapping on this buffer.
-		//
-		// Also note that this only applies to one of the two buffers in a render target buffer pair - making it
-		// unlikely that this issue occurs in practice with most shader packs.
-		IrisRenderSystem.generateMipmaps(texture, GL20C.GL_TEXTURE_2D);
+	private void setupMipmapping(CompositeTextureVersions.Texture read, String name) {
+		GpuProfiler.count(GpuProfiler.Count.MIP_REQUESTS);
+		RenderTarget target = renderTargets.get(read.logicalIndex());
+		// Descriptors retain allocation IDs; resolve deferred level-zero ownership
+		// before testing/generating mipmaps, not later during sampler binding.
+		target.prepareMipmaps();
+		int texture = read.physicalId();
+		if (textureVersions.needsMipmaps(read)) {
+			GpuProfiler.count(GpuProfiler.Count.MIP_GENERATED);
+			int timer = GpuProfiler.begin(name);
+			IrisRenderSystem.generateMipmaps(texture, GL20C.GL_TEXTURE_2D);
+			GpuProfiler.end(timer);
+			textureVersions.mipmapsGenerated(read);
+		} else {
+			GpuProfiler.count(GpuProfiler.Count.MIP_SKIPPED);
+		}
+		// Preserve explicit requests' filter updates, and stale mipmaps on ordinary reads.
 
 		int filter = GL20C.GL_LINEAR_MIPMAP_LINEAR;
 		if (target.getInternalFormat().getPixelFormat().isInteger()) {
@@ -222,12 +268,14 @@ public class CompositeRenderer {
 			}
 			renderTargets.destroyFramebuffer(pass.framebuffer);
 			pass.framebuffer = renderTargets.createColorFramebuffer(pass.stageReadsFromAlt, pass.drawBuffers);
+			describeResources(pass);
 			pass.viewWidth = passWidth;
 			pass.viewHeight = passHeight;
 		}
 	}
 
 	public void renderAll() {
+		textureVersions.beginInvocation();
 		RENDER_SYSTEM.disableBlend();
 
 		FullScreenQuadRenderer.INSTANCE.begin();
@@ -241,12 +289,15 @@ public class CompositeRenderer {
 					ranCompute = true;
 					computeProgram.use();
 					this.customUniforms.push(computeProgram);
+					int timer = GpuProfiler.begin(computeNames.get(computeProgram));
 					computeProgram.dispatch(mcWidth, mcHeight);
+					GpuProfiler.end(timer);
 				}
 			}
 
 			if (ranCompute) {
 				IrisRenderSystem.memoryBarrier(GL43C.GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL43C.GL_TEXTURE_FETCH_BARRIER_BIT | GL43C.GL_SHADER_STORAGE_BARRIER_BIT);
+				textureVersions.unknownWrite();
 			}
 
 			Program.unbind();
@@ -255,11 +306,16 @@ public class CompositeRenderer {
 				continue;
 			}
 
+			// Later pipeline stages can lazily create targets absent during this constructor.
+			if (renderPass.resources.mipmapReads().size() != renderPass.mipmappedBuffers.size()) {
+				describeResources(renderPass);
+			}
+
 			if (!renderPass.mipmappedBuffers.isEmpty()) {
 				RENDER_SYSTEM.glActiveTexture(GL15C.GL_TEXTURE0);
 
-				for (int index : renderPass.mipmappedBuffers) {
-					setupMipmapping(CompositeRenderer.this.renderTargets.get(index), renderPass.stageReadsFromAlt.contains(index));
+				for (CompositeTextureVersions.Texture read : renderPass.resources.mipmapReads()) {
+					setupMipmapping(read, renderPass.mipmapName);
 				}
 			}
 
@@ -280,7 +336,10 @@ public class CompositeRenderer {
 			// program is the identifier for composite :shrug:
 			this.customUniforms.push(renderPass.program);
 
+			int timer = GpuProfiler.begin(renderPass.name);
 			FullScreenQuadRenderer.INSTANCE.renderQuad();
+			GpuProfiler.end(timer);
+			textureVersions.rasterWritten(renderPass.resources);
 
 			BlendModeOverride.restore();
 		}
@@ -420,6 +479,7 @@ public class CompositeRenderer {
 				centerDepthSampler.setUsage(builder.addDynamicSampler(centerDepthSampler::getCenterDepthTexture, "iris_centerDepthSmooth"));
 
 				programs[i] = builder.buildCompute();
+				computeNames.put(programs[i], "compute/" + source.getName());
 
 				customUniforms.mapholderToPass(builder, programs[i]);
 
@@ -438,6 +498,8 @@ public class CompositeRenderer {
 	}
 
 	private static class Pass {
+		String name;
+		String mipmapName;
 		int[] drawBuffers;
 		int viewWidth;
 		int viewHeight;
@@ -449,6 +511,8 @@ public class CompositeRenderer {
 		ImmutableSet<Integer> stageReadsFromAlt;
 		ImmutableSet<Integer> mipmappedBuffers;
 		ViewportData viewportScale;
+		boolean unknownWrites;
+		CompositeTextureVersions.PassResources resources;
 
 		protected void destroy() {
 			this.program.destroy();

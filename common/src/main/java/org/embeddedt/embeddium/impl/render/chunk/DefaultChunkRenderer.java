@@ -13,6 +13,7 @@ import org.embeddedt.embeddium.impl.gl.device.RenderDevice;
 import org.embeddedt.embeddium.impl.gl.tessellation.*;
 import org.embeddedt.embeddium.impl.model.quad.properties.ModelQuadFacing;
 import org.embeddedt.embeddium.impl.render.chunk.compile.sorting.ChunkPrimitiveType;
+import org.embeddedt.embeddium.impl.render.chunk.compile.sorting.QuadPrimitiveType;
 import org.embeddedt.embeddium.impl.render.chunk.data.SectionRenderDataStorage;
 import org.embeddedt.embeddium.impl.render.chunk.data.SectionRenderDataUnsafe;
 import org.embeddedt.embeddium.impl.render.chunk.lists.ChunkRenderListIterable;
@@ -84,6 +85,11 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
             shader.setModelViewMatrix(matrices.modelView());
 
             var primitiveType = shader.getPrimitiveType();
+            boolean coalescingEligible = !renderPass.isSorted() && !renderPass.isReverseOrder()
+                    && primitiveType == GlPrimitiveType.TRIANGLES
+                    && renderPassConfiguration.getPrimitiveTypeForPass(renderPass) == QuadPrimitiveType.TRIANGULATED
+                    && shader.supportsDrawCoalescing();
+            boolean coalesce = coalescingEligible && shader.useDrawCoalescing(renderPass);
 
             Iterator<ChunkRenderList> iterator = renderLists.iterator(renderPass.isReverseOrder());
 
@@ -109,7 +115,8 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
                 }
 
                 if (!renderPass.isSorted()) {
-                   getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, this.batch.getIndexBufferSize());
+                   int indexCount = coalesce ? coalesceDrawCommands(this.batch, true) : this.batch.getIndexBufferSize();
+                   getSharedIndexBuffer(renderPassConfiguration.getPrimitiveTypeForPass(renderPass), commandList).ensureCapacity(commandList, indexCount);
                 }
 
                 var tessellation = this.prepareTessellation(commandList, region);
@@ -174,22 +181,58 @@ public abstract class DefaultChunkRenderer extends ShaderChunkRenderer {
     }
 
     @SuppressWarnings("IntegerMultiplicationImplicitCastToLong")
-    private static void addDrawCommands(MultiDrawBatch batch, long pMeshData, int mask, int indexPointerMask) {
+    static void addDrawCommands(MultiDrawBatch batch, long pMeshData, int mask, int indexPointerMask) {
         final var pBaseVertex = batch.pBaseVertex;
         final var pElementCount = batch.pElementCount;
         final var pElementPointer = batch.pElementPointer;
 
         int size = batch.size;
 
-        for (int facing = 0; facing < ModelQuadFacing.COUNT; facing++) {
+        // Visit selected slices in the same order, without loading/storing rejected slices.
+        for (int remaining = mask; remaining != 0; remaining &= remaining - 1) {
+            int facing = Integer.numberOfTrailingZeros(remaining);
             MemoryUtil.memPutInt(pBaseVertex + (size << 2), SectionRenderDataUnsafe.getVertexOffset(pMeshData, facing));
             MemoryUtil.memPutInt(pElementCount + (size << 2), SectionRenderDataUnsafe.getElementCount(pMeshData, facing));
             MemoryUtil.memPutAddress(pElementPointer + (size << 3), SectionRenderDataUnsafe.getIndexOffset(pMeshData, facing) & indexPointerMask);
 
-            size += (mask >> facing) & 1;
+            size++;
         }
 
         batch.size = size;
+    }
+
+    /** Same ordered index stream; only legal when shader-visible draw boundaries are unobservable. */
+    static int coalesceDrawCommands(MultiDrawBatch batch, boolean apply) {
+        return coalesceDrawCommands(batch, apply, Integer.MAX_VALUE);
+    }
+
+    static int coalesceDrawCommands(MultiDrawBatch batch, boolean apply, int maxMergedIndices) {
+        int output = 0, maxCount = 0;
+        for (int i = 0; i < batch.size;) {
+            int base = MemoryUtil.memGetInt(batch.pBaseVertex + i * 4L);
+            int count = MemoryUtil.memGetInt(batch.pElementCount + i * 4L);
+            long pointer = MemoryUtil.memGetAddress(batch.pElementPointer + i * 8L);
+            i++;
+            while (pointer == 0 && count > 0 && count % 6 == 0 && i < batch.size) {
+                int nextBase = MemoryUtil.memGetInt(batch.pBaseVertex + i * 4L);
+                int nextCount = MemoryUtil.memGetInt(batch.pElementCount + i * 4L);
+                if (MemoryUtil.memGetAddress(batch.pElementPointer + i * 8L) != 0
+                        || nextCount <= 0 || nextCount % 6 != 0
+                        || (long) base + (long) (count / 6) * 4 != nextBase
+                        || (long) count + nextCount > maxMergedIndices) break;
+                count += nextCount;
+                i++;
+            }
+            maxCount = Math.max(maxCount, count);
+            if (apply) {
+                MemoryUtil.memPutInt(batch.pBaseVertex + output * 4L, base);
+                MemoryUtil.memPutInt(batch.pElementCount + output * 4L, count);
+                MemoryUtil.memPutAddress(batch.pElementPointer + output * 8L, pointer);
+            }
+            output++;
+        }
+        if (apply) batch.size = output;
+        return maxCount;
     }
 
     private static final int MODEL_UNASSIGNED = ModelQuadFacing.UNASSIGNED.ordinal();

@@ -13,6 +13,7 @@ import net.irisshaders.iris.gl.blending.BlendModeOverride;
 import net.irisshaders.iris.gl.blending.BufferBlendOverride;
 import net.irisshaders.iris.pipeline.SodiumTerrainPipeline;
 import net.irisshaders.iris.pipeline.WorldRenderingPipeline;
+import net.irisshaders.iris.pipeline.foss_transform.TerrainDrawEligibility;
 import net.irisshaders.iris.shadows.ShadowRenderingState;
 import org.embeddedt.embeddium.impl.gl.shader.GlProgram;
 import org.embeddedt.embeddium.impl.gl.shader.GlShader;
@@ -36,7 +37,8 @@ public class IrisChunkProgramOverrides {
     private boolean shadersCreated = false;
     private int versionCounterForSodiumShaderReload = -1;
 
-    private GlShader createShader(ShaderType type, IrisTerrainPass pass, SodiumTerrainPipeline pipeline) {
+    private GlShader createShader(ShaderType type, IrisTerrainPass pass, SodiumTerrainPipeline pipeline,
+                                  Map<ShaderType, String> finalSources) {
         if (pass == IrisTerrainPass.SHADOW_CUTOUT && type != ShaderType.FRAGMENT) {
             pass = IrisTerrainPass.SHADOW;
         }
@@ -56,6 +58,7 @@ public class IrisChunkProgramOverrides {
         boolean simpleStages = List.of(ShaderType.GEOM, ShaderType.TESS_CTRL, ShaderType.TESS_EVALUATE)
                 .stream().noneMatch(stage -> info.sources().getOrDefault(stage, Optional.empty()).isPresent());
         source = VintageOilShader.patch(source, type, simpleStages);
+        finalSources.put(type, source);
 
         return new GlShader(type, "iris:sodium-terrain-" + pass.toString().toLowerCase(Locale.ROOT) + "." + type.fileExtension, source);
     }
@@ -63,9 +66,10 @@ public class IrisChunkProgramOverrides {
     @Nullable
     private GlProgram<ChunkShaderInterface> createShader(IrisTerrainPass pass, SodiumTerrainPipeline pipeline, RenderPassConfiguration<?> configuration) {
         Map<ShaderType, GlShader> createdShaders = new EnumMap<>(ShaderType.class);
+        Map<ShaderType, String> finalSources = new EnumMap<>(ShaderType.class);
 
         for (var type : RELEVANT_SHADER_TYPES) {
-            var shader = createShader(type, pass, pipeline);
+            var shader = createShader(type, pass, pipeline, finalSources);
             if (shader != null) {
                 createdShaders.put(type, shader);
             }
@@ -83,6 +87,19 @@ public class IrisChunkProgramOverrides {
         }
 
         try {
+            String rejection = pass != IrisTerrainPass.GBUFFER_CUTOUT
+                    ? "pass" : createdShaders.size() != 2 ? "extra-stages" : null;
+            if (rejection == null) {
+                for (String source : finalSources.values()) {
+                    rejection = TerrainDrawEligibility.rejectionReason(source);
+                    if (rejection != null) break;
+                }
+            }
+            boolean coalescingEligible = rejection == null;
+            if (IrisCommon.getIrisConfig().areDebugOptionsEnabled()) {
+                IRIS_LOGGER.info("[TerrainDraw] {} eligibility={} (production cutout-only; independent of profiling)",
+                        pass, coalescingEligible ? "eligible" : rejection);
+            }
             GlProgram.Builder builder = GlProgram.builder("iris:sodium_chunk_shader_for_" + pass.getName());
             createdShaders.values().forEach(builder::attachShader);
 
@@ -102,7 +119,7 @@ public class IrisChunkProgramOverrides {
                     blendOverride,
                     bufferOverrides,
                     alpha,
-                    pipeline.getCustomUniforms()));
+                    pipeline.getCustomUniforms(), coalescingEligible));
         } finally {
             createdShaders.values().forEach(GlShader::delete);
         }

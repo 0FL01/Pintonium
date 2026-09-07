@@ -40,6 +40,8 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.lwjgl.opengl.GL32C;
+import org.lwjgl.opengl.GL11C;
+import org.lwjgl.opengl.GL31C;
 
 public class IrisChunkShaderInterface implements ChunkShaderInterface {
     @Nullable
@@ -68,11 +70,13 @@ public class IrisChunkShaderInterface implements ChunkShaderInterface {
     private final boolean isTess;
     private final boolean isShadowPass;
     private final CustomUniforms customUniforms;
+    private final boolean coalescingEligible;
+    private boolean coalescingThisPass;
 
     public IrisChunkShaderInterface(int handle, ShaderBindingContext contextExt, SodiumTerrainPipeline pipeline,
                                     ChunkShaderOptions options, boolean isTess, boolean isShadowPass,
                                     BlendModeOverride blendModeOverride, List<BufferBlendOverride> bufferOverrides,
-                                    float alpha, CustomUniforms customUniforms) {
+                                    float alpha, CustomUniforms customUniforms, boolean coalescingEligible) {
         this.uniformModelViewMatrix = contextExt.bindUniformIfPresent("iris_ModelViewMatrix", GlUniformMatrix4f::new);
         this.uniformModelViewMatrixInverse = contextExt.bindUniformIfPresent("iris_ModelViewMatrixInverse", GlUniformMatrix4f::new);
         this.uniformProjectionMatrix = contextExt.bindUniformIfPresent("iris_ProjectionMatrix", GlUniformMatrix4f::new);
@@ -81,6 +85,7 @@ public class IrisChunkShaderInterface implements ChunkShaderInterface {
         this.uniformNormalMatrix = contextExt.bindUniformIfPresent("iris_NormalMatrix", GlUniformMatrix3f::new);
         this.uniformBlockDrawParameters = contextExt.bindUniformBlockIfPresent("ubo_DrawParameters", 0);
         this.customUniforms = customUniforms;
+        this.coalescingEligible = coalescingEligible;
         this.isTess = isTess;
         this.isShadowPass = isShadowPass;
         this.alpha = alpha;
@@ -125,6 +130,11 @@ public class IrisChunkShaderInterface implements ChunkShaderInterface {
         irisProgramSamplers.update();
         irisProgramImages.update();
         customUniforms.push(this);
+        // A custom restart index observes raw indices, not the preserved index + baseVertex stream.
+        // Query once per eligible pass, never per region; do not change the caller's GL state.
+        coalescingThisPass = coalescingEligible && !isShadowPass
+                && !ShadowRenderingState.areShadowsCurrentlyBeingRendered()
+                && !GL11C.glIsEnabled(GL31C.GL_PRIMITIVE_RESTART);
     }
 
     @Override
@@ -141,6 +151,17 @@ public class IrisChunkShaderInterface implements ChunkShaderInterface {
         }
 
         GL_STATE_MANAGER.glActiveTexture(GL32C.GL_TEXTURE0);
+    }
+
+    @Override
+    public boolean supportsDrawCoalescing() {
+        return coalescingThisPass;
+    }
+
+    @Override
+    public boolean useDrawCoalescing(TerrainRenderPass pass) {
+        return supportsDrawCoalescing() && !pass.isSorted() && !pass.isReverseOrder()
+                && pass.supportsFragmentDiscard();
     }
 
     @Override
