@@ -103,10 +103,11 @@ public class IrisVintage implements CeleritasShaderVersionService {
         defineBiomeAlias(define, definedKeys, "SPARSE_JUNGLE", "jungle_edge");
         defineBiomeAlias(define, definedKeys, "BAMBOO_JUNGLE", "jungle");
         defineBiomeAlias(define, definedKeys, "NETHER_WASTES", "hell");
-        defineBiomeAlias(define, definedKeys, "CRIMSON_FOREST", "hell");
-        defineBiomeAlias(define, definedKeys, "WARPED_FOREST", "hell");
-        defineBiomeAlias(define, definedKeys, "BASALT_DELTAS", "hell");
-        defineBiomeAlias(define, definedKeys, "SOUL_SAND_VALLEY", "hell");
+        // Distinct Nether biomes must not all match hell: packs sum their smoothed weights.
+        defineMissingBiome(define, definedKeys, "CRIMSON_FOREST");
+        defineMissingBiome(define, definedKeys, "WARPED_FOREST");
+        defineMissingBiome(define, definedKeys, "BASALT_DELTAS");
+        defineMissingBiome(define, definedKeys, "SOUL_SAND_VALLEY");
         defineBiomeAlias(define, definedKeys, "PALE_GARDEN", "roofed_forest");
 
         defineMissingBiome(define, definedKeys, "CHERRY_GROVE");
